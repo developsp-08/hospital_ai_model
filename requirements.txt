@@ -1,0 +1,11 @@
+#AI/Data Science Libraries
+
+pandas
+scikit-learn
+joblib
+
+#FastAPI Server Libraries
+
+fastapi
+uvicorn
+python-multipart 
