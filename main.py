@@ -1,17 +1,41 @@
-from fastapi import FastAPI, File, UploadFile, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from core.predictor import load_model, make_predictions
-import pandas as pd
-import io
+# main.py (FINAL VERSION)
 
-app = FastAPI(title="AI Inventory Prediction Service")
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
+from core.predictor import load_model_metadata, predict_inventory_usage
+from starlette.middleware.cors import CORSMiddleware
+import logging
+from typing import Dict, Any
 
-# Setup CORS: สำคัญมากเพื่อให้ Node.js และ React คุยกันได้
+# --- Setup ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# --- Dependency: Load Model Metadata ---
+def get_model_metadata() -> Dict[str, Any]:
+    global INVENTORY_MODEL_METADATA
+    if 'INVENTORY_MODEL_METADATA' not in globals():
+        try:
+            INVENTORY_MODEL_METADATA = load_model_metadata()
+            logger.info("Model loaded successfully.")
+        except FileNotFoundError as e:
+            logger.error(f"Error loading model: {e}")
+            INVENTORY_MODEL_METADATA = None
+    return INVENTORY_MODEL_METADATA
+
+# --- Initialize FastAPI ---
+app = FastAPI(
+    title="Hospital Inventory Predictor API (XGBoost)",
+    version="1.0.0"
+)
+
+# --- CORS Configuration ---
 origins = [
-    "http://localhost:3000",  # React Frontend
-    "http://localhost:3001",  # Node.js Backend
-    "*" 
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -20,41 +44,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# โหลด Model เมื่อ Server เริ่มต้น (ใช้ Depends หรือโหลด Global)
-inventory_model = load_model()
+# --- API Endpoints ---
 
-# Helper function to get the loaded model instance
-def get_model():
-    """Provides the pre-loaded AI model instance."""
-    return inventory_model
+@app.get("/")
+def read_root():
+    return {"message": "XGBoost Inventory Predictor API is running."}
 
-@app.post("/api/predict/")
-async def predict_inventory(
-    file: UploadFile = File(...),
-    model = Depends(get_model)
+@app.post("/predict")
+async def predict_inventory_from_file(
+    file: UploadFile = File(..., description="ไฟล์ Excel ที่มีข้อมูลการใช้งานล่าสุด (Snapshot)"),
+    forecast_days: int = Form(3, description="จำนวนเดือนที่ต้องการทำนายล่วงหน้า"),
+    metadata: Dict[str, Any] = Depends(get_model_metadata)
 ):
     """
-    Endpoint ที่รับไฟล์ Excel จาก Backend (Node.js) และคืนผลการทำนายสต็อก
+    รับไฟล์ Excel ล่าสุดเพื่อทำนายยอด Usage, จัดลำดับความสำคัญ, และคำนวณต้นทุน
     """
-    if model is None:
-        return {"status": "error", "message": "AI Model not initialized. Check server logs."}
-        
+    if metadata is None:
+        raise HTTPException(status_code=503, detail="Model service unavailable. Please run train_and_save_model.ipynb first.")
+    
+    # 1. อ่านไฟล์ที่อัปโหลดเป็น bytes
+    file_content = await file.read()
+    
+    # 2. ทำนายและคำนวณ Actions
     try:
-        # 1. อ่านไฟล์ Excel ที่อัปโหลดจาก Buffer
-        file_content = await file.read()
-        # Use io.BytesIO to read the binary content directly with pandas
-        df_uploaded = pd.read_excel(io.BytesIO(file_content), engine='openpyxl')
+        results = predict_inventory_usage(
+            metadata=metadata, 
+            file_content=file_content,
+            forecast_days=forecast_days
+        )
         
-        # 2. ทำนายผลลัพธ์
-        predictions_data = make_predictions(model, df_uploaded)
-        
-        # 3. คืนผลลัพธ์
-        return {"status": "success", "predictions": predictions_data}
-
+        # 3. จัดโครงสร้าง Output สำหรับ Dashboard
+        return {
+            "Total_SKUs_Trained": results['metrics']['total_skus'],
+            "Total_Reorder_Cost": results['metrics']['reorder_cost_total'],
+            "Forecast_Data": results['forecast'],
+            "Priority_Metrics": {
+                "High_Priority_Items": results['metrics']['high_priority_items'],
+                "Medium_Priority_Items": results['metrics']['medium_priority_items'],
+                "Action_Items_Summary": results['metrics']['action_items']
+            }
+        }
+    
     except Exception as e:
-        print(f"Prediction Error: {e}")
-        return {"status": "error", "message": f"Processing failed: {str(e)}"}
-
-@app.get("/api/health/")
-def health_check():
-    return {"status": "ok", "message": "AI Predictor is running."}
+        logger.error(f"Prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
