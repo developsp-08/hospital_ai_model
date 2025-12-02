@@ -7,33 +7,41 @@ import datetime
 from io import BytesIO
 from typing import Dict, Any, List
 import warnings
+from tensorflow.keras.models import load_model
+# FIX: Import mean_squared_error จาก keras.losses เพื่อแก้ปัญหา ImportError ใน Uvicorn
+from keras.losses import mean_squared_error 
 
-# ปิดคำเตือน (warnings)
 warnings.filterwarnings('ignore')
 
-MODEL_PATH = 'models/inventory_model.pkl'
+MODEL_PATH = 'models/inventory_model_lstm.pkl'
+TRAINING_DATA_PATH = 'data/Training_Data_Final.xlsx'
 
 def load_model_metadata(path: str = MODEL_PATH) -> Dict[str, Any]:
-    """โหลดโมเดลและ Metadata"""
+    """โหลดโมเดลและ Metadata รวมถึง Keras Model Weights"""
     if not os.path.exists(path):
         raise FileNotFoundError(f"Model file not found at: {path}.")
     metadata = load(path)
+    
+    # โหลด Keras Model Weights
+    try:
+        # FIX: ระบุ custom_objects เพื่อให้ Keras รู้จัก 'mse'
+        metadata['model'] = load_model(
+            metadata['model_path'],
+            custom_objects={'mse': mean_squared_error}
+        )
+    except Exception as e:
+        # หากยัง Error ให้แสดง Error ที่เกี่ยวข้องกับการโหลดโมเดลออกมา
+        raise Exception(f"Failed to load Keras model weights from {metadata['model_path']}: {e}")
+        
     return metadata
 
 def get_start_date_from_file(metadata: Dict) -> datetime.datetime:
-    """
-    กำหนดวันเริ่มต้นทำนายโดยใช้ Max Date จากข้อมูล Training 
-    """
-    
+    """กำหนดวันเริ่มต้นทำนายเป็นวันแรกของเดือนถัดไปจาก Max Training Date"""
     try:
         max_training_date = metadata['max_date']
-        
-        # วันเริ่มต้นทำนายคือวันแรกของเดือนถัดไปจาก Max Training Date
         start_date = max_training_date + pd.DateOffset(months=1)
         return start_date.replace(day=1)
-
     except Exception as e:
-        # หากเกิดข้อผิดพลาดในการอ่าน metadata (เช่น max_date ไม่มี)
         raise Exception(f"Failed to infer start date from model metadata: {e}.")
 
 
@@ -43,7 +51,8 @@ def calculate_inventory_actions(df_latest_data: pd.DataFrame, usage_forecast: pd
     total_skus = len(metadata['item_list'])
     all_actions = []
 
-    # 1. GroupBy เพื่อหาค่าเฉลี่ย/ค่าล่าสุดของ Inventory Params ใน Input Snapshot
+    # 1. GroupBy เพื่อหาค่าเฉลี่ย/ค่าล่าสุดของ Inventory Params
+    df_latest_data.columns = df_latest_data.columns.str.strip().str.replace(' ', '_')
     sku_groups = df_latest_data.groupby('SKU').agg({
         'Stock_on_Hand_Qty': 'mean',
         'Lead_Time_Days': 'mean',
@@ -53,52 +62,44 @@ def calculate_inventory_actions(df_latest_data: pd.DataFrame, usage_forecast: pd
     }).reset_index()
     
     # 2. คำนวณค่าเฉลี่ยการใช้งานต่อวัน (Avg_Daily_Usage) จากข้อมูล Training ทั้งหมด
-    
-    # *** สมมติฐาน: ไฟล์ Training_Data_Final.xlsx ต้องอยู่ใน path 'data/' ***
     try:
-        df_train = pd.read_excel('data/Training_Data_Final.xlsx')
+        df_train = pd.read_excel(TRAINING_DATA_PATH)
+        df_train.columns = df_train.columns.str.strip().str.replace(' ', '_')
         df_train['Usage_Qty'] = pd.to_numeric(df_train['Usage_Qty'], errors='coerce')
         df_train = df_train.dropna(subset=['Date', 'Usage_Qty'])
         total_days_trained = (metadata['max_date'] - metadata['base_date']).days + 1
         avg_daily_usage_all_data = df_train.groupby('SKU')['Usage_Qty'].sum() / total_days_trained
     except Exception:
-        # ใช้ค่า Default หากไม่พบไฟล์ Training หรือมีข้อผิดพลาด
         avg_daily_usage_all_data = pd.Series(1.0, index=metadata['item_list'])
 
 
     # 3. คำนวณ ROP, Stock-out Date และ Priority
     for index, sku_row in sku_groups.iterrows():
         sku = sku_row['SKU']
-        
-        # กรองผลทำนายสำหรับ SKU นี้
         forecast_sku = usage_forecast[usage_forecast['SKU'] == sku].copy()
 
-        # ดึง Inventory Parameters
         LT_Days = sku_row.get('Lead_Time_Days', 14) 
         SS_Qty = sku_row.get('Safety_Stock_Qty', 50)
         SOH = sku_row.get('Stock_on_Hand_Qty', 200) 
         UC = sku_row.get('Unit_Cost', 10)
         
-        # 3.1 คำนวณ ROP Threshold (ใช้ค่าเฉลี่ยการใช้งานรายวันจากข้อมูล Training ทั้งหมด)
+        # 3.1 คำนวณ ROP Threshold
         avg_daily_usage = avg_daily_usage_all_data.get(sku, 1)
         rop_threshold = (avg_daily_usage * LT_Days) + SS_Qty
-        rop_threshold = max(3, rop_threshold) # กำหนดค่าขั้นต่ำเป็น 3 
+        rop_threshold = max(3, rop_threshold)
 
-        # 3.2 หาเดือนที่ Stock จะหมด (ใช้ Predicted Usage)
+        # 3.2 หาเดือนที่ Stock จะหมด
         stock_current = SOH
         stock_out_date = None
 
         for _, row in forecast_sku.iterrows():
-            # ใช้จำนวนวันจริงในเดือนนั้นๆ ในการคำนวณการใช้ (เพื่อความแม่นยำ)
-            # แต่ในกรณีนี้ Predicted Usage เป็นยอดรวมต่อเดือนแล้ว
             monthly_predicted_usage = row['predicted_usage']
             
             if stock_current >= monthly_predicted_usage:
                 stock_current -= monthly_predicted_usage
             else:
-                # คำนวณวันที่ขาดแคลน
                 remaining_stock = stock_current
-                # สมมติการใช้ต่อวันในเดือนนี้เท่ากับ Predicted Usage / จำนวนวันในเดือน
+                # ใช้ pd.Period เพื่อหาจำนวนวันในเดือน
                 days_in_month = pd.Period(row['date'], freq='M').days_in_month
                 daily_usage = monthly_predicted_usage / days_in_month if monthly_predicted_usage > 0 else 0.1
                 
@@ -106,22 +107,19 @@ def calculate_inventory_actions(df_latest_data: pd.DataFrame, usage_forecast: pd
                     days_to_stock_out = (remaining_stock / daily_usage)
                     stock_out_date = (row['date'] + timedelta(days=days_to_stock_out)).strftime('%Y-%m-%d')
                 else:
-                    stock_out_date = 'N/A' # ไม่มีวันหมดเพราะไม่ถูกใช้
+                    stock_out_date = 'N/A' 
                     
                 stock_current = 0
                 break
 
-        # 3.3 จัดกลุ่ม Priority และคำนวณ Reorder Qty (Rule-Based Logic)
+        # 3.3 จัดกลุ่ม Priority และคำนวณ Reorder Qty
         is_high_risk = (SOH < rop_threshold) and (stock_out_date is not None) and (stock_out_date != 'N/A')
         
         if is_high_risk:
             priority_group = 'High Priority'
-            # สั่งซื้อเพื่อให้มีสต็อกเพียงพอไปอีก Lead Time 
-            # และบวก Safety Stock (ROP)
             reorder_qty = rop_threshold 
         elif SOH < (rop_threshold * 1.5):
             priority_group = 'Medium Priority'
-            # สั่งซื้อเพื่อให้มีสต็อกเหลือเฟือเล็กน้อย
             reorder_qty = int(np.round(rop_threshold * 1.5))
         else:
             priority_group = 'Low Priority'
@@ -157,85 +155,116 @@ def predict_inventory_usage(
     
     # 1. โหลดไฟล์ล่าสุด (Snapshot Input) และทำความสะอาด
     df_latest = pd.read_excel(BytesIO(file_content), sheet_name=0) 
-    df_latest.columns = df_latest.columns.str.strip()
+    df_latest.columns = df_latest.columns.str.strip().str.replace(' ', '_')
     
-    # 2. กำหนด Start Date 
+    # 2. กำหนด Start Date และ Metadata Components
     start_date = get_start_date_from_file(metadata)
-    
-    # 3. สร้าง Input Features สำหรับ XGBoost
     base_date = metadata['base_date']
     features = metadata['features']
     sku_list = metadata['item_list']
+    timesteps = metadata['timesteps']
+    scaler = metadata['scaler']
+    lstm_model = metadata['model'] # Keras Model Object
+
+    # 3. เตรียมข้อมูลย้อนหลังสำหรับ Lag (History Window)
+    df_latest['Date'] = pd.to_datetime(df_latest['Date'], errors='coerce')
+    df_latest = df_latest.dropna(subset=['Date'])
+    df_latest = df_latest.sort_values(by='Date').reset_index(drop=True)
     
-    # ดึงค่า Contextual Features ล่าสุดจากไฟล์ที่อัปโหลด
-    last_known_context = df_latest.iloc[0].to_dict()
-    
-    # สร้างตารางทำนาย
-    df_predict_dates = pd.DataFrame({'Date': pd.date_range(start=start_date, periods=forecast_days, freq='MS')})
-    
-    # --- FIX: แก้ปัญหา KeyError สำหรับ Patient_Count/Total_SKU_Usage ---
+    # ต้องสร้าง Visit_Campus_Num และ Time Features
     try:
-        avg_patient_count = df_latest['Patient_Count'].mean()
+        df_latest['Visit_Campus_Num'] = df_latest['Visit_Campus'].astype('category').cat.codes
     except KeyError:
-        # ใช้ค่า Default หากไม่พบคอลัมน์ Patient_Count
-        avg_patient_count = 1500 
+        df_latest['Visit_Campus_Num'] = 0
+        
+    df_latest['day_index'] = (df_latest['Date'] - base_date).dt.days
+    df_latest['month_num'] = df_latest['Date'].dt.month
+    df_latest['year_num'] = df_latest['Date'].dt.year
+
+    # 3.1 ดึง Contextual Features ล่าสุดจาก History Window
+    # (ใช้ค่าเฉลี่ยของข้อมูลล่าสุดที่ได้รับมาเพื่อการทำนาย)
+    last_context = df_latest.iloc[-1].to_dict()
     
+    try:
+        avg_patient_e = df_latest['Patient_E'].mean()
+        avg_patient_i = df_latest['Patient_I'].mean()
+        avg_patient_o = df_latest['Patient_O'].mean()
+    except KeyError:
+        # Default ค่าถ้าคอลัมน์หาย
+        avg_patient_e, avg_patient_i, avg_patient_o = 500, 500, 500
+        
     try:
         avg_total_usage = df_latest['Total_SKU_Usage'].mean()
     except KeyError:
-        # ใช้ค่า Default หากไม่พบคอลัมน์ Total_SKU_Usage
         avg_total_usage = 1500 
+    
+    try:
+        avg_visit_campus_num = df_latest['Visit_Campus_Num'].mean()
+    except KeyError:
+        avg_visit_campus_num = 0
 
-    # 4. สร้าง DataFrame สำหรับทำนาย (Expansion)
-    df_predict = pd.DataFrame({
-        'Date': np.repeat(df_predict_dates['Date'], len(sku_list)),
-        'SKU': np.tile(sku_list, len(df_predict_dates)),
-    }).sort_values(by='Date').reset_index(drop=True)
+    # 4. Iterative Prediction (การทำนายแบบวนซ้ำ)
+    df_forecast_list = []
     
-    # 5. Map Time Features และ Contextual Features (แบบคงที่/เฉลี่ย)
-    df_predict['day_index'] = (df_predict['Date'] - base_date).dt.days
-    df_predict['month_num'] = df_predict['Date'].dt.month
-    df_predict['year_num'] = df_predict['Date'].dt.year
-    
-    # Contextual Features ที่ใช้ในการทำนาย จะใช้ค่าเฉลี่ยของข้อมูลล่าสุดที่ได้รับมา
-    df_predict['Patient_Count'] = avg_patient_count
-    df_predict['Total_SKU_Usage'] = avg_total_usage
-    
-    # 6. Iterative Prediction (การทำนายแบบวนซ้ำเพื่อให้ Lag1 เป็น Dynamic)
-    df_predict['predicted_usage'] = 0 # สร้างคอลัมน์เปล่า
-    
-    for i in range(len(df_predict_dates)):
-        current_date = df_predict_dates.iloc[i]['Date']
-        df_current_month = df_predict[df_predict['Date'] == current_date].copy()
+    for sku in sku_list:
         
-        # 6.1. กำหนด Lag1:
-        if i == 0:
-            # เดือนแรก: ใช้ค่า Latest_Usage_Qty จาก Snapshot
-            try:
-                lag_values = df_latest.groupby('SKU')['Latest_Usage_Qty'].mean().to_dict()
-                df_current_month['lag1'] = df_current_month['SKU'].map(lag_values).fillna(30)
-            except KeyError:
-                # FIX: หากคอลัมน์ Latest_Usage_Qty หายไป ให้ใช้ค่า Default 30
-                df_current_month['lag1'] = 30
-        else:
-            # เดือนถัดไป: ใช้ผลทำนายของเดือนก่อน (i-1) เป็น Lag1
-            df_prev_month = df_predict[df_predict['Date'] == df_predict_dates.iloc[i-1]['Date']]
-            lag_values = df_prev_month.set_index('SKU')['predicted_usage'].to_dict()
-            df_current_month['lag1'] = df_current_month['SKU'].map(lag_values).fillna(30)
+        # 4.1. เตรียม History Window (ย้อนหลัง TIMESTEPS)
+        df_history = df_latest[df_latest['SKU'] == sku].tail(timesteps).copy()
+        
+        if len(df_history) < timesteps:
+            warnings.warn(f"SKU {sku} has insufficient history for LSTM (need {timesteps}, found {len(df_history)}). Skipping prediction for this SKU.")
+            continue 
+
+        # 4.2. เตรียมตารางทำนาย
+        df_predict_dates = pd.DataFrame({'Date': pd.date_range(start=start_date, periods=forecast_days, freq='MS')})
+        df_predict_temp = df_predict_dates.copy()
+        df_predict_temp['SKU'] = sku
+        
+        # Map Contextual Features สำหรับอนาคต (ใช้ค่าเฉลี่ย)
+        df_predict_temp['Visit_Campus_Num'] = avg_visit_campus_num
+        df_predict_temp['Patient_E'] = avg_patient_e
+        df_predict_temp['Patient_I'] = avg_patient_i
+        df_predict_temp['Patient_O'] = avg_patient_o
+        df_predict_temp['Total_SKU_Usage'] = avg_total_usage 
+        
+        df_predict_temp['Usage_Qty'] = 0.0
+
+        current_window = df_history[features].copy()
+        
+        # 4.3. Loop ทำนายทีละเดือน
+        for i in range(forecast_days):
+            # i) เตรียม Input Window (3D Tensor)
+            X_input_scaled = scaler.transform(current_window.values)
+            X_input_reshaped = X_input_scaled[np.newaxis, :, :] # (1, TIMESTEPS, FEATURES)
+
+            # ii) ทำนาย
+            prediction_scaled = lstm_model.predict(X_input_reshaped, verbose=0)[0][0]
             
-        
-        # 6.2. ทำนายผล:
-        X_predict = df_current_month[features]
-        predictions = metadata['model'].predict(X_predict)
-        
-        # 6.3. บันทึกผลทำนายกลับเข้าไปใน DataFrame หลัก
-        df_predict.loc[df_predict['Date'] == current_date, 'predicted_usage'] = np.maximum(0, predictions).round().astype(int)
+            # iii) Inverse Transform เพื่อให้ได้ยอดใช้จริง
+            dummy_row = np.zeros(len(features))
+            dummy_row[features.index('Usage_Qty')] = prediction_scaled
+            
+            prediction_actual = scaler.inverse_transform(dummy_row.reshape(1, -1))[0][features.index('Usage_Qty')]
+            predicted_usage = max(0, int(np.round(prediction_actual)))
+            
+            # iv) บันทึกผลทำนายใน DataFrame ชั่วคราว
+            df_predict_temp.loc[i, 'Usage_Qty'] = predicted_usage
+            
+            # v) เตรียม Window ใหม่สำหรับรอบถัดไป (Shifting Window)
+            next_row_context = df_predict_temp.loc[i, features].values
+            next_row_context[features.index('Usage_Qty')] = predicted_usage
+            
+            current_window = pd.DataFrame(
+                np.vstack([current_window.iloc[1:], next_row_context]),
+                columns=features
+            )
 
+        # 4.4. บันทึกผลทำนาย
+        df_forecast_list.append(df_predict_temp[['Date', 'SKU', 'Usage_Qty']].rename(columns={'Usage_Qty': 'predicted_usage'}))
+
+    df_forecast_result = pd.concat(df_forecast_list).reset_index(drop=True)
     
-    # 7. จัดรูปแบบผลลัพธ์
-    df_forecast_result = df_predict[['Date', 'predicted_usage', 'SKU']].rename(columns={'Date': 'date'})
-    
-    # 8. คำนวณ Actions และ Priority
+    # 5. คำนวณ Actions และ Priority
     action_metrics = calculate_inventory_actions(df_latest, df_forecast_result, metadata)
     
     return {
