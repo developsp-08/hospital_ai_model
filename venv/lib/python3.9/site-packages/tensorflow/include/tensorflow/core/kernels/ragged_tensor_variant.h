@@ -68,20 +68,20 @@ class RaggedTensorVariant {
 };
 
 template <typename Device>
-absl::Status RaggedTensorVariantZerosLike(OpKernelContext* c,
-                                          const RaggedTensorVariant& x,
-                                          RaggedTensorVariant* y) {
+Status RaggedTensorVariantZerosLike(OpKernelContext* c,
+                                    const RaggedTensorVariant& x,
+                                    RaggedTensorVariant* y) {
   y->set_nested_splits(x.nested_splits());
   TF_RETURN_IF_ERROR(
       ZerosLikeTensor<Device>(c, x.values(), y->mutable_values()));
-  return absl::OkStatus();
+  return OkStatus();
 }
 
 template <typename Device>
-absl::Status RaggedTensorVariantBinaryAdd(OpKernelContext* c,
-                                          const RaggedTensorVariant& x,
-                                          const RaggedTensorVariant& y,
-                                          RaggedTensorVariant* out) {
+Status RaggedTensorVariantBinaryAdd(OpKernelContext* c,
+                                    const RaggedTensorVariant& x,
+                                    const RaggedTensorVariant& y,
+                                    RaggedTensorVariant* out) {
   if (x.values().dtype() != y.values().dtype()) {
     return errors::InvalidArgument(
         "Can't add RaggedTensorVariants of different dtypes. One is ",
@@ -102,7 +102,7 @@ absl::Status RaggedTensorVariantBinaryAdd(OpKernelContext* c,
   out->set_nested_splits(x.nested_splits());
   TF_RETURN_IF_ERROR(BinaryAddTensors<Device>(c, x.values(), y.values(),
                                               out->mutable_values()));
-  return absl::OkStatus();
+  return OkStatus();
 }
 
 }  // namespace tensorflow

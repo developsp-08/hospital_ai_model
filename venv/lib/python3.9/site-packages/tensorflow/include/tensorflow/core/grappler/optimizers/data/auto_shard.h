@@ -36,13 +36,12 @@ class AutoShard : public TFDataOptimizerBase {
 
   bool UsesFunctionLibrary() const override { return true; }
 
-  absl::Status Init(
+  Status Init(
       const tensorflow::RewriterConfig_CustomGraphOptimizer* config) override;
 
-  absl::Status OptimizeAndCollectStats(Cluster* cluster,
-                                       const GrapplerItem& item,
-                                       GraphDef* output,
-                                       OptimizationStats* stats) override;
+  Status OptimizeAndCollectStats(Cluster* cluster, const GrapplerItem& item,
+                                 GraphDef* output,
+                                 OptimizationStats* stats) override;
 
  private:
   int64_t num_workers_;

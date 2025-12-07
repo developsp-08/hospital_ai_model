@@ -34,7 +34,6 @@ class MapDatasetOp : public UnaryDatasetOpKernel {
       "use_inter_op_parallelism";
   static constexpr const char* const kPreserveCardinality =
       "preserve_cardinality";
-  static constexpr const char* const kForceSynchronous = "force_synchronous";
 
   explicit MapDatasetOp(OpKernelConstruction* ctx);
 
@@ -48,7 +47,6 @@ class MapDatasetOp : public UnaryDatasetOpKernel {
   DataTypeVector output_types_;
   std::vector<PartialTensorShape> output_shapes_;
   bool preserve_cardinality_;
-  bool force_synchronous_;
 };
 
 }  // namespace data

@@ -79,7 +79,7 @@ class TracingOperation : public AbstractOperation {
   // Sets the name of the operation: this is an optional identifier that is
   // not intended to carry semantics and preserved/propagated without
   // guarantees.
-  virtual absl::Status SetOpName(const char* op_name) = 0;
+  virtual Status SetOpName(const char* op_name) = 0;
 
   // For LLVM style RTTI.
   static bool classof(const AbstractOperation* ptr) {
@@ -108,13 +108,12 @@ class TracingContext : public AbstractContext {
 
  public:
   // Add a function parameter and return the corresponding tensor.
-  virtual absl::Status AddParameter(DataType dtype,
-                                    const PartialTensorShape& shape,
-                                    TracingTensorHandle**) = 0;
+  virtual Status AddParameter(DataType dtype, const PartialTensorShape& shape,
+                              TracingTensorHandle**) = 0;
 
   // Finalize this context and make a function out of it. The context is in a
   // invalid state after this call and must be destroyed.
-  virtual absl::Status Finalize(OutputList* outputs, AbstractFunction**) = 0;
+  virtual Status Finalize(OutputList* outputs, AbstractFunction**) = 0;
 
   // For LLVM style RTTI.
   static bool classof(const AbstractContext* ptr) {
@@ -123,7 +122,7 @@ class TracingContext : public AbstractContext {
 };
 
 typedef TracingContext* (*FactoryFunction)(const char* fn_name, TF_Status*);
-absl::Status SetDefaultTracingEngine(const char* name);
+Status SetDefaultTracingEngine(const char* name);
 void RegisterTracingEngineFactory(const ::tensorflow::string& name,
                                   FactoryFunction factory);
 }  // namespace tracing

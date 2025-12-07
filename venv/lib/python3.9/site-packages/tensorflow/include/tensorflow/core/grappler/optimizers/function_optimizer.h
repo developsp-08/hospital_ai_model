@@ -35,8 +35,8 @@ class FunctionOptimizer : public GraphOptimizer {
 
   bool UsesFunctionLibrary() const override { return true; }
 
-  absl::Status Optimize(Cluster* cluster, const GrapplerItem& item,
-                        GraphDef* optimized_graph) override;
+  Status Optimize(Cluster* cluster, const GrapplerItem& item,
+                  GraphDef* optimized_graph) override;
 
  private:
   friend class FunctionOptimizerTest;
@@ -46,8 +46,8 @@ class FunctionOptimizer : public GraphOptimizer {
   // `optimized_graph`. Function call nodes inlined or specialized, and
   // instantiated function body or specialized function call nodes will be added
   // to the `optimized_graph`.
-  absl::Status RunFunctionOptimizerPass(const GrapplerItem& item,
-                                        GraphDef* optimized_graph) const;
+  Status RunFunctionOptimizerPass(const GrapplerItem& item,
+                                  GraphDef* optimized_graph) const;
 
   RewriterConfig::Toggle opt_level_;
   bool lower_control_flow_;

@@ -16,17 +16,12 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_IR_TF_OP_WRAPPER_H_
 #define TENSORFLOW_CORE_IR_TF_OP_WRAPPER_H_
 
-#include <cassert>
 #include <cstddef>
-#include <utility>
 
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/iterator_range.h"
-#include "mlir/IR/BuiltinAttributes.h"  // from @llvm-project
 #include "mlir/IR/Operation.h"  // from @llvm-project
 #include "mlir/IR/OperationSupport.h"  // from @llvm-project
 #include "mlir/IR/TypeRange.h"  // from @llvm-project
-#include "mlir/Support/LLVM.h"  // from @llvm-project
 #include "tensorflow/core/ir/dialect.h"
 #include "tensorflow/core/ir/types/dialect.h"
 #include "tensorflow/core/ir/utility.h"
@@ -43,7 +38,7 @@ class ControlRetIterator final
                                    ValueIteratorT, Value>::mapped_iterator_base;
 
   Value mapElement(Value value) const {
-    return mlir::isa<tf_type::ControlType>(value.getType())
+    return value.getType().isa<tf_type::ControlType>()
                ? value
                : tfg::LookupControlDependency(value);
   }

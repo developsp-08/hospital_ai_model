@@ -55,7 +55,7 @@ namespace tensorflow {
 // to it.
 class IsolatePlacerInspectionRequiredOpsPass : public GraphOptimizationPass {
  public:
-  absl::Status Run(const GraphOptimizationPassOptions& options) override;
+  Status Run(const GraphOptimizationPassOptions& options) override;
 };
 
 }  // namespace tensorflow

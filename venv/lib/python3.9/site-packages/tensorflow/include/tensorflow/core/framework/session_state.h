@@ -31,13 +31,13 @@ namespace tensorflow {
 class SessionState {
  public:
   // Get a tensor from the session state.
-  absl::Status GetTensor(const std::string& handle, Tensor* tensor);
+  Status GetTensor(const std::string& handle, Tensor* tensor);
 
   // Store a tensor in the session state.
-  absl::Status AddTensor(const std::string& handle, const Tensor& tensor);
+  Status AddTensor(const std::string& handle, const Tensor& tensor);
 
   // Delete a tensor from the session state.
-  absl::Status DeleteTensor(const std::string& handle);
+  Status DeleteTensor(const std::string& handle);
 
   int64_t GetNewId();
 
@@ -68,11 +68,11 @@ class TensorStore {
   };
 
   // Add the named tensor to the tensor store for this run.
-  absl::Status AddTensor(const std::string& name, const TensorAndKey& tk);
+  Status AddTensor(const std::string& name, const TensorAndKey& tk);
 
   // Save the tensors in the tensor store of this run to the session.
-  absl::Status SaveTensors(const std::vector<string>& output_names,
-                           SessionState* session_state);
+  Status SaveTensors(const std::vector<string>& output_names,
+                     SessionState* session_state);
 
   // Returns true if no tensors have been added to this store.
   bool empty() TF_NO_THREAD_SAFETY_ANALYSIS { return !dirty_; }

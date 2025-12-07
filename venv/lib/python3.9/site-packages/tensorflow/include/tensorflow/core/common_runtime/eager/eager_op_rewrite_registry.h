@@ -37,9 +37,8 @@ class EagerOpRewrite {
   virtual ~EagerOpRewrite() = default;
 
   // To be implemented by an Eager op rewrite pass.
-  virtual absl::Status Run(
-      EagerOperation* orig_op,
-      std::unique_ptr<tensorflow::EagerOperation>* out_op) = 0;
+  virtual Status Run(EagerOperation* orig_op,
+                     std::unique_ptr<tensorflow::EagerOperation>* out_op) = 0;
 
   // Holds information about the rewrite registration.
   struct DebugInfo {
@@ -66,8 +65,8 @@ class EagerOpRewriteRegistry {
                 std::unique_ptr<EagerOpRewrite> pass);
 
   // Run the rewrite pass registered for a given phase.
-  absl::Status RunRewrite(Phase phase, EagerOperation* orig_op,
-                          std::unique_ptr<tensorflow::EagerOperation>* out_op);
+  Status RunRewrite(Phase phase, EagerOperation* orig_op,
+                    std::unique_ptr<tensorflow::EagerOperation>* out_op);
 
   // Returns the global registry of rewrite passes.
   static EagerOpRewriteRegistry* Global();

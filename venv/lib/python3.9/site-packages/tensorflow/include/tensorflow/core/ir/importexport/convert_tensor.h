@@ -31,11 +31,11 @@ namespace mlir {
 namespace tfg {
 
 // Converts an TensorFlow tensor proto into an MLIR elements attribute.
-absl::StatusOr<ElementsAttr> ConvertTensorProto(
+tensorflow::StatusOr<ElementsAttr> ConvertTensorProto(
     const tensorflow::TensorProto& input_tensor, Builder builder);
 
 // Converts an TensorFlow tensor into an MLIR elements attribute.
-absl::StatusOr<ElementsAttr> ConvertTensor(
+tensorflow::StatusOr<ElementsAttr> ConvertTensor(
     const tensorflow::Tensor& input_tensor, Builder builder);
 
 // Converts a shape from MLIR to a TensorFlow tensor shape proto.
@@ -46,7 +46,7 @@ void ConvertToTensorShapeProto(ArrayRef<int64_t> shape,
 tensorflow::PartialTensorShape ConvertTypeToTensorShape(const Type& type);
 
 // Converts a TensorFlow shape attribute to an MLIR shape attribute.
-absl::StatusOr<ShapeAttr> ConvertTensorShapeProto(
+tensorflow::StatusOr<ShapeAttr> ConvertTensorShapeProto(
     const tensorflow::TensorShapeProto& shape, MLIRContext* context);
 
 // Fill in the contents of TensorShapeProto for the given shape.
@@ -69,12 +69,12 @@ void SetTensorShapeProto(ShapeContainerT shape,
 }
 
 // Converts an MLIR elements attribute to a TensorFlow tensor proto.
-absl::Status ConvertToTensorProto(ElementsAttr attr,
-                                  tensorflow::TensorProto* output_tensor);
+tensorflow::Status ConvertToTensorProto(ElementsAttr attr,
+                                        tensorflow::TensorProto* output_tensor);
 
 // Converts an MLIR elements attribute to a TensorFlow tensor.
-absl::Status ConvertToTensor(ElementsAttr attr,
-                             tensorflow::Tensor* output_tensor);
+tensorflow::Status ConvertToTensor(ElementsAttr attr,
+                                   tensorflow::Tensor* output_tensor);
 
 // Converts a TF shape to MLIR shape, i.e. -1 becomes kDynamicSize.
 llvm::SmallVector<int64_t> ConvertTFShapeToMlir(llvm::ArrayRef<int64_t> shape);

@@ -39,13 +39,13 @@ class FrameView {
 
   // Infers nodes execution frames from the GraphView. Returns an error if
   // called multiple times.
-  absl::Status InferFromGraphView(const utils::GraphView& graph_view);
+  Status InferFromGraphView(const utils::GraphView& graph_view);
   // Infers nodes execution frames from the MutableGraphView. Returns an error
   // if called multiple times.
-  absl::Status InferFromGraphView(const utils::MutableGraphView& graph_view);
+  Status InferFromGraphView(const utils::MutableGraphView& graph_view);
   // Infers nodes execution by constructing temporary GraphView and passing it
   // to InferFromGraphView.
-  absl::Status InferFromGraph(const GraphDef& graph);
+  Status InferFromGraph(const GraphDef& graph);
 
   // Returns all frames of the given node (denoted by their frame ids) in
   // outermost-to-innermost order.
@@ -59,7 +59,7 @@ class FrameView {
 
  private:
   template <typename GraphViewT>
-  inline absl::Status InferFromGraphViewT(const GraphViewT& graph_view);
+  inline Status InferFromGraphViewT(const GraphViewT& graph_view);
 
   bool is_inferred_;  // true if it was inferred from the graph
   int num_frames_;    // number of frames present in a graph

@@ -28,11 +28,10 @@ namespace grappler {
 class CustomGraphOptimizer : public GraphOptimizer {
  public:
   virtual ~CustomGraphOptimizer() {}
-  virtual absl::Status Init(
-      const tensorflow::RewriterConfig_CustomGraphOptimizer* config =
-          nullptr) = 0;
+  virtual Status Init(const tensorflow::RewriterConfig_CustomGraphOptimizer*
+                          config = nullptr) = 0;
   // Populates ConfigProto on which the Session is run prior to running Init.
-  absl::Status InitWithConfig(
+  Status InitWithConfig(
       const ConfigProto& config_proto,
       const tensorflow::RewriterConfig_CustomGraphOptimizer* config = nullptr) {
     config_proto_ = config_proto;

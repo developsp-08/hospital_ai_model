@@ -36,14 +36,14 @@ class ThreadPoolDevice : public LocalDevice {
   ScopedAllocatorMgr* GetScopedAllocatorMgr() const override {
     return scoped_allocator_mgr_.get();
   }
-  absl::Status MakeTensorFromProto(const TensorProto& tensor_proto,
-                                   const AllocatorAttributes alloc_attrs,
-                                   Tensor* tensor) override;
+  Status MakeTensorFromProto(const TensorProto& tensor_proto,
+                             const AllocatorAttributes alloc_attrs,
+                             Tensor* tensor) override;
   void CopyTensorInSameDevice(const Tensor* input_tensor, Tensor* output_tensor,
                               const DeviceContext* device_context,
                               StatusCallback done) override;
 
-  absl::Status Sync() override { return absl::OkStatus(); }
+  Status Sync() override { return OkStatus(); }
 
   void Compute(OpKernel* op_kernel, OpKernelContext* context) override;
   void ComputeAsync(AsyncOpKernel* op_kernel, OpKernelContext* context,

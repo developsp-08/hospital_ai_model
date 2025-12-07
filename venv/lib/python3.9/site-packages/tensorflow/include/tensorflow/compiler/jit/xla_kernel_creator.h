@@ -37,9 +37,9 @@ class XlaKernelCreator : public CustomKernelCreator {
       const std::shared_ptr<const NodeProperties>& props) const override;
 
   // Given a supported NodeDef, returns a XlaLaunchOp that computes the node.
-  absl::Status CreateKernel(FunctionLibraryRuntime* flr,
-                            const std::shared_ptr<const NodeProperties>& props,
-                            std::unique_ptr<OpKernel>* kernel) const override;
+  Status CreateKernel(FunctionLibraryRuntime* flr,
+                      const std::shared_ptr<const NodeProperties>& props,
+                      std::unique_ptr<OpKernel>* kernel) const override;
 };
 
 bool RegisterLaunchOpCreator();

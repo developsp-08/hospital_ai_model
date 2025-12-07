@@ -31,15 +31,14 @@ class FilterFusion : public TFDataOptimizerBase {
 
   bool UsesFunctionLibrary() const override { return false; }
 
-  absl::Status Init(
+  Status Init(
       const tensorflow::RewriterConfig_CustomGraphOptimizer* config) override {
-    return absl::OkStatus();
+    return OkStatus();
   }
 
-  absl::Status OptimizeAndCollectStats(Cluster* cluster,
-                                       const GrapplerItem& item,
-                                       GraphDef* output,
-                                       OptimizationStats* stats) override;
+  Status OptimizeAndCollectStats(Cluster* cluster, const GrapplerItem& item,
+                                 GraphDef* output,
+                                 OptimizationStats* stats) override;
 };
 
 }  // namespace grappler

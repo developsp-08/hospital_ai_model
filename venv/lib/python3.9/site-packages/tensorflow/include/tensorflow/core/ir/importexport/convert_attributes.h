@@ -33,16 +33,17 @@ namespace tfg {
 
 // Convert the list of MLIR Attributes `attrs` to the `tensorflow::AttrValueMap`
 // `values`.
-absl::Status ConvertAttributes(ArrayRef<NamedAttribute> attrs,
-                               ArrayRef<StringRef> attrs_to_ignore,
-                               bool remove_ref_type,
-                               tensorflow::AttrValueMap* values);
+tensorflow::Status ConvertAttributes(ArrayRef<NamedAttribute> attrs,
+                                     ArrayRef<StringRef> attrs_to_ignore,
+                                     bool remove_ref_type,
+                                     tensorflow::AttrValueMap* values);
 
 // Convert the MLIR attribute `attr` and return a `tensorflow::AttrValue`.
-absl::StatusOr<tensorflow::AttrValue> ConvertAttribute(Attribute attr);
+tensorflow::StatusOr<tensorflow::AttrValue> ConvertAttribute(Attribute attr);
 
-absl::Status SetShapeAttribute(absl::string_view name, ShapedType shaped_type,
-                               tensorflow::AttrValueMap* values);
+tensorflow::Status SetShapeAttribute(absl::string_view name,
+                                     ShapedType shaped_type,
+                                     tensorflow::AttrValueMap* values);
 
 // Converts an MLIR shaped type to a TensorFlow shape attribute.
 ShapeAttr ConvertTypeToTensorShapeAttr(const Type& type);
@@ -52,33 +53,33 @@ ShapeAttr ConvertTypeToTensorShapeAttr(const Type& type);
 // Converts non func AttrValue proto into an MLIR attribute. Func attribute is
 // exclused in this function because the function might be renamed when the
 // function definition is imported.
-absl::StatusOr<Attribute> ConvertNonFuncAttributeValue(
+tensorflow::StatusOr<Attribute> ConvertNonFuncAttributeValue(
     const tensorflow::AttrValue& value, Builder& builder);
 
 // Converts all kinds of AttrValue proto into an MLIR attribute.
-absl::StatusOr<Attribute> ConvertAttributeValue(
+tensorflow::StatusOr<Attribute> ConvertAttributeValue(
     const tensorflow::AttrValue& value, Builder& builder);
 
 // Convert the MLIR FullTyoe attribute `attr` and return a
 // `tensorflow::FullTypeDef`.
-absl::StatusOr<tensorflow::FullTypeDef> ConvertAttribute(
+tensorflow::StatusOr<tensorflow::FullTypeDef> ConvertAttribute(
     tf_type::FullTypeAttr full_type);
 
 // Converts fulltype proto to attribute.
-absl::StatusOr< ::mlir::tf_type::FullTypeAttr> ConvertAttribute(
+tensorflow::StatusOr<::mlir::tf_type::FullTypeAttr> ConvertAttribute(
     const tensorflow::FullTypeDef& full_type, Builder& builder);
 
 // Convert an array of handle data (pairs of data types and shapes) to an array
 // attribute of tensor types.
-absl::StatusOr<ArrayAttr> ConvertHandleData(
+tensorflow::StatusOr<ArrayAttr> ConvertHandleData(
     Builder builder,
     const tensorflow::protobuf::RepeatedPtrField<
         tensorflow::ResourceHandleProto_DtypeAndShape>& handle_data);
 
 // Convert an array of handle data into the `handle_data` field of the provided
 // ArgDef. Each entry of the array is expected to be a TensorType.
-absl::Status ConvertHandleData(ArrayAttr handle_data_arr,
-                               tensorflow::OpDef::ArgDef* arg);
+tensorflow::Status ConvertHandleData(ArrayAttr handle_data_arr,
+                                     tensorflow::OpDef::ArgDef* arg);
 
 }  // namespace tfg
 }  // namespace mlir

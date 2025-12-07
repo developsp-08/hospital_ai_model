@@ -18,7 +18,6 @@ limitations under the License.
 
 #include <functional>
 
-#include "absl/status/statusor.h"
 #include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/op_kernel.h"
 
@@ -27,8 +26,8 @@ namespace data {
 
 // Returns the finalized version of the dataset. The returned DatasetBase is
 // unowned and lives for as long as this dataset.
-absl::StatusOr<DatasetBase*> GetFinalizedDataset(OpKernelContext* ctx,
-                                                 const DatasetBase* dataset);
+StatusOr<DatasetBase*> GetFinalizedDataset(OpKernelContext* ctx,
+                                           const DatasetBase* dataset);
 
 }  // namespace data
 }  // namespace tensorflow

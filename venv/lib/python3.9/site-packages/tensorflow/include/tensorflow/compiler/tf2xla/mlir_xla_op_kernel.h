@@ -16,10 +16,7 @@ limitations under the License.
 #ifndef TENSORFLOW_COMPILER_TF2XLA_MLIR_XLA_OP_KERNEL_H_
 #define TENSORFLOW_COMPILER_TF2XLA_MLIR_XLA_OP_KERNEL_H_
 
-#include "tensorflow/compiler/tf2xla/xla_compiler.h"
 #include "tensorflow/compiler/tf2xla/xla_op_kernel.h"
-#include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/platform/status.h"
 
 namespace tensorflow {
 
@@ -30,10 +27,10 @@ class MlirXlaOpKernel : public XlaOpKernel {
   explicit MlirXlaOpKernel(OpKernelConstruction* ctx);
 
  private:
-  absl::Status ContextToXlaArgs(XlaOpKernelContext* ctx,
-                                std::vector<XlaCompiler::Argument>& xla_args);
+  Status ContextToXlaArgs(XlaOpKernelContext* ctx,
+                          std::vector<XlaCompiler::Argument>& xla_args);
   void Compile(XlaOpKernelContext* ctx) override;
-  absl::Status ConstructXlaOp(XlaOpKernelContext* ctx);
+  Status ConstructXlaOp(XlaOpKernelContext* ctx);
 };
 
 }  // namespace tensorflow

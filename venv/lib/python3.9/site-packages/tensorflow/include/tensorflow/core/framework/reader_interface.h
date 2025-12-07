@@ -65,7 +65,7 @@ class ReaderInterface : public ResourceBase {
                            OpKernelContext* context) = 0;
 
   // Restore this reader to its newly-constructed state.
-  virtual absl::Status Reset() = 0;
+  virtual Status Reset() = 0;
 
   // Accessors
   virtual int64_t NumRecordsProduced() = 0;
@@ -73,14 +73,14 @@ class ReaderInterface : public ResourceBase {
 
   // -- Serialization/Restoration support --
   // Not all readers will support saving and restoring state.
-  virtual absl::Status SerializeState(tstring* state) = 0;
+  virtual Status SerializeState(tstring* state) = 0;
   // Note: Must Reset on error.
-  virtual absl::Status RestoreState(const tstring& state) = 0;
+  virtual Status RestoreState(const tstring& state) = 0;
 
   string DebugString() const override { return "a reader"; }
 
  protected:
-  ~ReaderInterface() override {}
+  virtual ~ReaderInterface() {}
 };
 
 }  // namespace tensorflow

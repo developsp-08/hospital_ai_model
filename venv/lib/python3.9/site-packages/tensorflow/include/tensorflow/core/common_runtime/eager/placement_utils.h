@@ -24,25 +24,24 @@ limitations under the License.
 namespace tensorflow {
 namespace eager {
 
-bool IsColocationExempt(absl::string_view op_name);
+bool IsColocationExempt(StringPiece op_name);
 
-bool IsFunction(absl::string_view op_name);
+bool IsFunction(StringPiece op_name);
 
 // TODO(b/154234908): Unify placement logic.
 
 // Pin the op to cpu if all op inputs are on the CPU, small (<64 elements) and
 // integers (int32/int64). This can be disabled by setting the environment
 // variable "TF_EAGER_ENABLE_SMALL_TENSOR_CPU_PINNING" to "0" or "false".
-absl::Status MaybePinSmallOpsToCpu(
-    bool* result, absl::string_view op_name,
+Status MaybePinSmallOpsToCpu(
+    bool* result, StringPiece op_name,
     absl::Span<ImmediateExecutionTensorHandle* const> args,
-    absl::string_view cpu_device_name);
+    StringPiece cpu_device_name);
 
 // If a resource touching input is specified, all resource-touching ops run in
 // the device the resource is, regardless of anything else that has been
 // specified. This is identical to the graph mode behavior.
-absl::Status MaybePinToResourceDevice(Device** device,
-                                      const EagerOperation& op);
+Status MaybePinToResourceDevice(Device** device, const EagerOperation& op);
 }  // namespace eager
 }  // namespace tensorflow
 

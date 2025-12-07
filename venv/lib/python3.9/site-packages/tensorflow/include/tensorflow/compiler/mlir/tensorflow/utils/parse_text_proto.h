@@ -25,17 +25,17 @@ namespace tensorflow {
 
 // Sets output to the given input with `prefix` stripped, or returns an error if
 // the prefix doesn't exist.
-absl::Status ConsumePrefix(absl::string_view str, absl::string_view prefix,
-                           absl::string_view* output);
+Status ConsumePrefix(absl::string_view str, absl::string_view prefix,
+                     absl::string_view* output);
 
 // Strips `prefix_to_strip` from `text_proto`, parses, and returns the parsed
 // proto.
-absl::Status ParseTextProto(absl::string_view text_proto,
-                            absl::string_view prefix_to_strip,
-                            protobuf::Message* parsed_proto);
-inline absl::Status ParseTextProto(absl::string_view /* text_proto */,
-                                   absl::string_view /* prefix_to_strip */,
-                                   protobuf::MessageLite* /* parsed_proto */) {
+Status ParseTextProto(absl::string_view text_proto,
+                      absl::string_view prefix_to_strip,
+                      protobuf::Message* parsed_proto);
+inline Status ParseTextProto(absl::string_view /* text_proto */,
+                             absl::string_view /* prefix_to_strip */,
+                             protobuf::MessageLite* /* parsed_proto */) {
   return errors::Unavailable("Cannot parse text protos on mobile.");
 }
 

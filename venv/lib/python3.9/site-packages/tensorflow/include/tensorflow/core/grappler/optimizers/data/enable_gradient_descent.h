@@ -34,9 +34,9 @@ class EnableGradientDescent : public TFDataOptimizerBase {
 
   bool UsesFunctionLibrary() const override { return false; }
 
-  absl::Status Init(
+  Status Init(
       const tensorflow::RewriterConfig_CustomGraphOptimizer* config) override {
-    if (!config) return absl::OkStatus();
+    if (!config) return OkStatus();
 
     const string& autotune = config->parameter_map().at(kAutotune).s();
     if (autotune == "true") {
@@ -47,13 +47,12 @@ class EnableGradientDescent : public TFDataOptimizerBase {
       return errors::InvalidArgument("Received an invalid value for parameter ",
                                      kAutotune, ": ", autotune);
     }
-    return absl::OkStatus();
+    return OkStatus();
   }
 
-  absl::Status OptimizeAndCollectStats(Cluster* cluster,
-                                       const GrapplerItem& item,
-                                       GraphDef* output,
-                                       OptimizationStats* stats) override;
+  Status OptimizeAndCollectStats(Cluster* cluster, const GrapplerItem& item,
+                                 GraphDef* output,
+                                 OptimizationStats* stats) override;
 
  private:
   bool autotune_ = true;

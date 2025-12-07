@@ -25,10 +25,10 @@ limitations under the License.
 namespace tensorflow {
 namespace eager {
 
-absl::Status RunShapeInference(
-    const NodeDef& ndef, const FunctionLibraryDefinition& lib_def,
-    const absl::InlinedVector<TensorHandle*, 4UL>& inputs,
-    const absl::InlinedVector<TensorHandle*, 2UL>& retvals);
+Status RunShapeInference(const NodeDef& ndef,
+                         const FunctionLibraryDefinition& lib_def,
+                         const gtl::InlinedVector<TensorHandle*, 4>& inputs,
+                         const gtl::InlinedVector<TensorHandle*, 2>& retvals);
 
 }  // namespace eager
 }  // namespace tensorflow

@@ -25,7 +25,7 @@ namespace tensorflow {
 // broadcasts it via xla_activity_listener.
 class ReportClusteringInfoPass : public GraphOptimizationPass {
  public:
-  absl::Status Run(const GraphOptimizationPassOptions& options) override;
+  Status Run(const GraphOptimizationPassOptions& options) override;
 };
 }  // namespace tensorflow
 

@@ -55,7 +55,7 @@ class PartialRunMgr {
   // Calls the final callback if the PartialRunRequest has already completed.
   // Otherwise stores the executor_status to be propagated when the
   // PartialRunRequest completes (PartialRunDone has been called).
-  void ExecutorDone(int step_id, const absl::Status& executor_status);
+  void ExecutorDone(int step_id, const Status& executor_status);
 
   // Calls done if the executor has already completed (ExecutorDone has been
   // called). Otherwise, stores the status and done callback, calling them when
@@ -63,8 +63,7 @@ class PartialRunMgr {
   // thread of either PartialRunDone or ExecutorDone.
   // If executor_status in ExecutorDone is not OK, it takes precedence over
   // status and is passed to the done callback.
-  void PartialRunDone(int step_id, StatusCallback done,
-                      const absl::Status& status);
+  void PartialRunDone(int step_id, StatusCallback done, const Status& status);
 
  private:
   // PartialRunState stores state associated with a pending partial run request.
@@ -74,7 +73,7 @@ class PartialRunMgr {
 
     bool executor_done = false;
     StatusCallback final_callback = nullptr;
-    absl::Status final_status;
+    Status final_status;
   };
 
   mutex mu_;

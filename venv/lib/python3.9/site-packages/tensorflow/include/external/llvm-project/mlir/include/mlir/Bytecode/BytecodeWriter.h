@@ -14,7 +14,6 @@
 #define MLIR_BYTECODE_BYTECODEWRITER_H
 
 #include "mlir/IR/AsmState.h"
-#include "llvm/Config/llvm-config.h" // for LLVM_VERSION_STRING
 
 namespace mlir {
 class DialectBytecodeWriter;
@@ -82,7 +81,6 @@ public:
   /// printers for the fallback resources within the map.
   BytecodeWriterConfig(FallbackAsmResourceMap &map,
                        StringRef producer = "MLIR" LLVM_VERSION_STRING);
-  BytecodeWriterConfig(BytecodeWriterConfig &&);
   ~BytecodeWriterConfig();
 
   /// An internal implementation class that contains the state of the

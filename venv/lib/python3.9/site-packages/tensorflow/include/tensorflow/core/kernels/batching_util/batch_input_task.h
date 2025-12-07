@@ -145,7 +145,7 @@ template <typename TaskType>
 class BatchInputTask
     : public std::enable_shared_from_this<BatchInputTask<TaskType>> {
  public:
-  using SplitInputFunc = std::function<absl::Status(
+  using SplitInputFunc = std::function<Status(
       std::unique_ptr<TaskType>* input_task, int first_output_task_size,
       int input_batch_size_limit,
       std::vector<std::unique_ptr<TaskType>>* output_tasks)>;
@@ -172,8 +172,7 @@ class BatchInputTask
 
   std::unique_ptr<TaskType> GetSplitTask(int split_id);
 
-  absl::Status SplitBatches(
-      std::vector<std::unique_ptr<TaskType>>* output_tasks);
+  Status SplitBatches(std::vector<std::unique_ptr<TaskType>>* output_tasks);
 
   std::unique_ptr<TaskType> input_task_;
 
@@ -188,7 +187,7 @@ class BatchInputTask
   mutable absl::once_flag once_;
 
   std::vector<std::unique_ptr<TaskType>> task_splits_;
-  absl::Status split_status_;
+  Status split_status_;
 };
 
 //
@@ -254,7 +253,7 @@ std::unique_ptr<TaskType> BatchInputTask<TaskType>::GetSplitTask(int split_id) {
 }
 
 template <typename TaskType>
-absl::Status BatchInputTask<TaskType>::SplitBatches(
+Status BatchInputTask<TaskType>::SplitBatches(
     std::vector<std::unique_ptr<TaskType>>* output_tasks) {
   return split_func_(&input_task_, open_batch_remaining_slot_,
                      batch_size_limit_, output_tasks);

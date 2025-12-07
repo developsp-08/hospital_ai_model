@@ -66,11 +66,11 @@ class RemoteCopyNode : public AsyncEagerNode {
 
   ~RemoteCopyNode() override;
 
-  absl::Status Prepare() override;
+  Status Prepare() override;
 
   void RunAsync(StatusCallback done) override;
 
-  void Abort(absl::Status status) override;
+  void Abort(Status status) override;
 
   string DebugString() const override {
     string out = "[RemoteCopyNode]";
@@ -90,7 +90,7 @@ class RemoteCopyNode : public AsyncEagerNode {
   void StartSend();
 
   // Synchronously runs local send `op` and returns its status.
-  absl::Status RunLocalSend(EagerOperation* op);
+  Status RunLocalSend(EagerOperation* op);
 
   // Runs the _Recv operation locally or remotely.
   // An error return value indicates that _Recv did not run successfully. It
@@ -106,7 +106,7 @@ class RemoteCopyNode : public AsyncEagerNode {
 
   // Synchronously runs local receive `op` and returns its status.
   // Does not wait for the send to complete before running receive.
-  absl::Status RunLocalRecv(EagerOperation* op, std::vector<Tensor>* outputs);
+  Status RunLocalRecv(EagerOperation* op, std::vector<Tensor>* outputs);
 
   // Waits for send to complete, then issues remote receive `op` and
   // returns its status.
@@ -133,12 +133,12 @@ class RemoteCopyNode : public AsyncEagerNode {
     explicit CapturedSharedState(TensorHandle* d) : dst_(d) { dst_->Ref(); }
     ~CapturedSharedState() { dst_->Unref(); }
 
-    void SetSendStatus(absl::Status status) {
+    void SetSendStatus(Status status) {
       send_status_.Update(status);
       send_done_.Notify();
     }
 
-    absl::Status GetSendStatus() {
+    Status GetSendStatus() {
       send_done_.WaitForNotification();
       return send_status_;
     }
@@ -156,7 +156,7 @@ class RemoteCopyNode : public AsyncEagerNode {
     CancellationManager recv_cancellation_;
     // send_status_ is safe to read only after send_done_.WaitForNotification()
     // has returned.
-    absl::Status send_status_;
+    Status send_status_;
     Notification send_done_;
     TensorShape src_shape_;
   };

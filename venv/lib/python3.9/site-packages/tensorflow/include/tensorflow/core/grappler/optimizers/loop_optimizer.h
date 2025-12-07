@@ -42,8 +42,8 @@ class LoopOptimizer : public GraphOptimizer {
 
   bool UsesFunctionLibrary() const override { return false; }
 
-  absl::Status Optimize(Cluster* cluster, const GrapplerItem& item,
-                        GraphDef* optimized_graph) override;
+  Status Optimize(Cluster* cluster, const GrapplerItem& item,
+                  GraphDef* optimized_graph) override;
 
  private:
   friend class LoopOptimizerTest;
@@ -60,9 +60,10 @@ class LoopOptimizer : public GraphOptimizer {
     }
   };
 
-  absl::Status RemoveDeadBranches(
-      const std::unordered_set<string>& nodes_to_preserve, NodeMap& node_map,
-      const absl::flat_hash_set<string>& feed_nodes, GraphDef* optimized_graph);
+  Status RemoveDeadBranches(const std::unordered_set<string>& nodes_to_preserve,
+                            NodeMap& node_map,
+                            const absl::flat_hash_set<string>& feed_nodes,
+                            GraphDef* optimized_graph);
 
   RewriterConfig::Toggle opt_level_;
   DeviceBase* cpu_device_;

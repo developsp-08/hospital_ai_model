@@ -67,11 +67,11 @@ class TensorResponse {
 
   // Parse the RecvTensorResponse encoded in the data yielded by
   // source->contents() into *this.
-  absl::Status ParseFrom(Source* source);
+  Status ParseFrom(Source* source);
 
   // Initialize tensor from *response.
   // Leaves *response with unspecified contents.
-  absl::Status InitFrom(RecvTensorResponse* response);
+  Status InitFrom(RecvTensorResponse* response);
 
   // Initialize tensor metadata from response and allocate
   // uninitialized backing storage for actual contents.

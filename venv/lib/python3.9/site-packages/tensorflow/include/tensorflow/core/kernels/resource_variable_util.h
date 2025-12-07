@@ -20,8 +20,8 @@ limitations under the License.
 
 namespace tensorflow {
 
-absl::Status ValidateAssignUpdateVariableOpShapes(
-    const TensorShape& variable_shape, const TensorShape& value_shape);
+Status ValidateAssignUpdateVariableOpShapes(const TensorShape& variable_shape,
+                                            const TensorShape& value_shape);
 
 }  // namespace tensorflow
 

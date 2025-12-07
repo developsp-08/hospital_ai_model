@@ -30,7 +30,7 @@ namespace tensorflow {
 // clustering decision.
 class ClusterScopingPass : public GraphOptimizationPass {
  public:
-  absl::Status Run(const GraphOptimizationPassOptions& options) override;
+  Status Run(const GraphOptimizationPassOptions& options) override;
 };
 
 }  // namespace tensorflow

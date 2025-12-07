@@ -16,6 +16,7 @@
 #include "mlir/IR/AttrTypeSubElements.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/Support/InterfaceSupport.h"
+#include "mlir/Support/LogicalResult.h"
 #include "mlir/Support/StorageUniquer.h"
 #include "mlir/Support/TypeID.h"
 #include "llvm/ADT/FunctionExtras.h"
@@ -176,8 +177,8 @@ public:
   template <typename... Args>
   static ConcreteT get(MLIRContext *ctx, Args &&...args) {
     // Ensure that the invariants are correct for construction.
-    assert(succeeded(
-        ConcreteT::verifyInvariants(getDefaultDiagnosticEmitFn(ctx), args...)));
+    assert(
+        succeeded(ConcreteT::verify(getDefaultDiagnosticEmitFn(ctx), args...)));
     return UniquerT::template get<ConcreteT>(ctx, std::forward<Args>(args)...);
   }
 
@@ -198,7 +199,7 @@ public:
   static ConcreteT getChecked(function_ref<InFlightDiagnostic()> emitErrorFn,
                               MLIRContext *ctx, Args... args) {
     // If the construction invariants fail then we return a null attribute.
-    if (failed(ConcreteT::verifyInvariants(emitErrorFn, args...)))
+    if (failed(ConcreteT::verify(emitErrorFn, args...)))
       return ConcreteT();
     return UniquerT::template get<ConcreteT>(ctx, args...);
   }
@@ -226,7 +227,7 @@ protected:
 
   /// Default implementation that just returns success.
   template <typename... Args>
-  static LogicalResult verifyInvariants(Args... args) {
+  static LogicalResult verify(Args... args) {
     return success();
   }
 

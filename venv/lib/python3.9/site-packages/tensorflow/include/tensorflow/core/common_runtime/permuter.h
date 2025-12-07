@@ -49,14 +49,13 @@ class Permuter : public CollectiveImplementationInterface {
 
   void Run(StatusCallback done) override;
 
-  absl::Status InitializeCollectiveParams(
-      CollectiveParams* col_params) override {
-    return absl::OkStatus();
+  Status InitializeCollectiveParams(CollectiveParams* col_params) override {
+    return OkStatus();
   }
 
   // Initializes members of CollectiveContext not yet initialized, i.e. device
   // and device_locality.  Also saves the CollectiveContext in this object.
-  absl::Status InitializeCollectiveContext(
+  Status InitializeCollectiveContext(
       std::shared_ptr<CollectiveContext> col_ctx) override;
 
  private:
@@ -64,7 +63,7 @@ class Permuter : public CollectiveImplementationInterface {
   const CollectiveParams* col_params_;  // Not owned
   StatusCallback done_;
   mutex mu_;
-  absl::Status status_ TF_GUARDED_BY(mu_);
+  Status status_ TF_GUARDED_BY(mu_);
   int counter_ TF_GUARDED_BY(mu_);
 
   void DispatchSend(int src_rank, int target_rank, const Tensor* tensor,

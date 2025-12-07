@@ -23,8 +23,8 @@ namespace tensorflow {
 namespace functor {
 
 template <typename Device>
-absl::Status DoParallelConcat(const Device& device, const Tensor& value,
-                              int32_t loc, Tensor* output);
+Status DoParallelConcat(const Device& device, const Tensor& value, int32_t loc,
+                        Tensor* output);
 
 // Inplace update/add/sub values in 'y'. It computes
 //   y[i, :] = v if op is I_UPDATE
@@ -37,11 +37,11 @@ enum InplaceOpType {
   I_SUB,     // x -= y
 };
 template <typename Device>
-absl::Status DoInplace(const Device& device, InplaceOpType op, const Tensor& i,
-                       const Tensor& v, Tensor* y);
+Status DoInplace(const Device& device, InplaceOpType op, const Tensor& i,
+                 const Tensor& v, Tensor* y);
 // Copies x into y.
 template <typename Device>
-absl::Status DoCopy(const Device& device, const Tensor& x, Tensor* y);
+Status DoCopy(const Device& device, const Tensor& x, Tensor* y);
 
 }  // end namespace functor
 }  // end namespace tensorflow

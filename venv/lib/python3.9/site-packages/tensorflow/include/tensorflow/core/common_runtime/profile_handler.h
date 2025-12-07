@@ -41,9 +41,8 @@ class ProfileHandler {
   // - op_type: String name of the Op.
   // - details: Main content for timeline click text.
   virtual void RecordOneOp(const string& device, const NodeExecStats& stats,
-                           bool is_copy, absl::string_view label,
-                           absl::string_view op_type,
-                           absl::string_view details) = 0;
+                           bool is_copy, StringPiece label, StringPiece op_type,
+                           StringPiece details) = 0;
 
   // Records that the current step finished.
   //
@@ -57,7 +56,7 @@ class ProfileHandler {
   // - final_status: The status that this step finished with.
   virtual void StepDone(Microseconds start_time, Microseconds finish_time,
                         Microseconds cleanup_time, int total_runops,
-                        absl::Status final_status) = 0;
+                        Status final_status) = 0;
 
   // Returns true if the caller should collect rpc activity.
   virtual bool should_collect_rpcs() = 0;

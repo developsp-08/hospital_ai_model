@@ -34,7 +34,7 @@ class BuildXlaOpsPass : public GraphOptimizationPass {
       std::optional<bool> enable_lazy_compilation = std::nullopt)
       : enable_lazy_compilation_(enable_lazy_compilation) {}
 
-  absl::Status Run(const GraphOptimizationPassOptions& options) override;
+  Status Run(const GraphOptimizationPassOptions& options) override;
 
  private:
   std::optional<bool> enable_lazy_compilation_;

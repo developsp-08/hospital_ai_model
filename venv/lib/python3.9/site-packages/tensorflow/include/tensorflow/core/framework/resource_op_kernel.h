@@ -80,7 +80,7 @@ class ResourceOpKernel : public OpKernel {
                      mgr->LookupOrCreate<T>(
                          cinfo_.container(), cinfo_.name(), &resource,
                          [this](T** ret) TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-                           absl::Status s = CreateResource(ret);
+                           Status s = CreateResource(ret);
                            if (!s.ok() && *ret != nullptr) {
                              CHECK((*ret)->Unref());
                            }
@@ -133,7 +133,7 @@ class ResourceOpKernel : public OpKernel {
 
   // Must return a T descendant allocated with new that ResourceOpKernel will
   // take ownership of.
-  virtual absl::Status CreateResource(T** resource)
+  virtual Status CreateResource(T** resource)
       TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) = 0;
 
   // During the first Compute(), resource is either created or looked up using
@@ -141,7 +141,7 @@ class ResourceOpKernel : public OpKernel {
   // it is compatible with this op's configuration. The verification may fail in
   // cases such as two graphs asking queues of the same shared name to have
   // inconsistent capacities.
-  virtual absl::Status VerifyResource(T* resource) { return absl::OkStatus(); }
+  virtual Status VerifyResource(T* resource) { return OkStatus(); }
 
   Tensor tensor_ TF_GUARDED_BY(mu_);
 

@@ -25,14 +25,14 @@ namespace data {
 // See below macro for usage details.
 class AllowlistedStatefulOpRegistry {
  public:
-  absl::Status Add(string op_name) {
+  Status Add(string op_name) {
     op_names_.insert(std::move(op_name));
-    return absl::OkStatus();
+    return OkStatus();
   }
 
-  absl::Status Remove(string op_name) {
+  Status Remove(string op_name) {
     op_names_.erase(op_name);
-    return absl::OkStatus();
+    return OkStatus();
   }
 
   bool Contains(const string& op_name) { return op_names_.count(op_name); }

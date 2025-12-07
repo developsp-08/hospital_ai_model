@@ -34,13 +34,13 @@ class FunctionHandleCache {
   //
   // The cache retains the ownership of the handle. In particular, the caller
   // should not invoke `ReleaseHandle`.
-  absl::Status Instantiate(const string& function_name, AttrSlice attrs,
-                           FunctionLibraryRuntime::InstantiateOptions options,
-                           FunctionLibraryRuntime::Handle* handle);
+  Status Instantiate(const string& function_name, AttrSlice attrs,
+                     FunctionLibraryRuntime::InstantiateOptions options,
+                     FunctionLibraryRuntime::Handle* handle);
 
   // Releases all the handles in the cache, clearing out the state for all
   // functions involved.
-  absl::Status Clear();
+  Status Clear();
 
  private:
   mutex mu_;

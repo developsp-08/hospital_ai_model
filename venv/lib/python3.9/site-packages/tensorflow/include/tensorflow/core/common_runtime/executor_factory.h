@@ -31,19 +31,19 @@ struct LocalExecutorParams;
 
 class ExecutorFactory {
  public:
-  virtual absl::Status NewExecutor(const LocalExecutorParams& params,
-                                   const Graph& graph,
-                                   std::unique_ptr<Executor>* out_executor) = 0;
+  virtual Status NewExecutor(const LocalExecutorParams& params,
+                             const Graph& graph,
+                             std::unique_ptr<Executor>* out_executor) = 0;
   virtual ~ExecutorFactory() {}
 
   static void Register(const string& executor_type, ExecutorFactory* factory);
-  static absl::Status GetFactory(const string& executor_type,
-                                 ExecutorFactory** out_factory);
+  static Status GetFactory(const string& executor_type,
+                           ExecutorFactory** out_factory);
 };
 
-absl::Status NewExecutor(const string& executor_type,
-                         const LocalExecutorParams& params, const Graph& graph,
-                         std::unique_ptr<Executor>* out_executor);
+Status NewExecutor(const string& executor_type,
+                   const LocalExecutorParams& params, const Graph& graph,
+                   std::unique_ptr<Executor>* out_executor);
 
 }  // namespace tensorflow
 

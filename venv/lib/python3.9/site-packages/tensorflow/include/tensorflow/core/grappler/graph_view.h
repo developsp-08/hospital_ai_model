@@ -320,17 +320,17 @@ class GraphViewInternal {
  protected:
   explicit GraphViewInternal(GraphDefT* graph) : graph_(graph) {}
 
-  absl::Status AddUniqueNode(NodeDefT* node) {
+  Status AddUniqueNode(NodeDefT* node) {
     auto inserted = nodes_.emplace(node->name(), node);
     return inserted.second
-               ? absl::OkStatus()
+               ? OkStatus()
                : absl::InvalidArgumentError(absl::StrCat(
                      "Non unique node name detected: ", node->name()));
   }
 
   // TODO(ezhulenev): Remove this function.
   void AddUniqueNodeOrDie(NodeDefT* node) {
-    absl::Status st = AddUniqueNode(node);
+    Status st = AddUniqueNode(node);
     CHECK(st.ok()) << st.message();
   }
 
@@ -346,9 +346,8 @@ class GraphViewInternal {
         fanouts_[output].emplace(node, -1);
       } else {
         max_input_port = i;
-        int& max_regular_output_port = max_regular_output_port_[output.node];
-        max_regular_output_port =
-            std::max(max_regular_output_port, output.port_id);
+        max_regular_output_port_[output.node] =
+            std::max(max_regular_output_port_[output.node], output.port_id);
         fanouts_[output].emplace(node, i);
       }
     }

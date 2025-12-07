@@ -22,11 +22,10 @@ namespace tensorflow {
 namespace lookup {
 
 // Helper function to initialize an InitializableLookupTable from a text file.
-absl::Status InitializeTableFromTextFile(const string& filename,
-                                         int64_t vocab_size, char delimiter,
-                                         int32_t key_index, int32_t value_index,
-                                         Env* env,
-                                         InitializableLookupTable* table);
+Status InitializeTableFromTextFile(const string& filename, int64_t vocab_size,
+                                   char delimiter, int32_t key_index,
+                                   int32_t value_index, Env* env,
+                                   InitializableLookupTable* table);
 
 }  // namespace lookup
 }  // namespace tensorflow

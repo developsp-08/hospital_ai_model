@@ -38,11 +38,10 @@ namespace functor {
 
 template <typename Device>
 struct ReshapeSparseTensorFunctor {
-  absl::Status operator()(
-      OpKernelContext *context, const TensorShape &input_shape,
-      const TensorShape &output_shape,
-      typename TTypes<int64_t>::ConstMatrix input_indices,
-      typename TTypes<int64_t>::Matrix output_indices) const;
+  Status operator()(OpKernelContext *context, const TensorShape &input_shape,
+                    const TensorShape &output_shape,
+                    typename TTypes<int64_t>::ConstMatrix input_indices,
+                    typename TTypes<int64_t>::Matrix output_indices) const;
 };
 
 }  // namespace functor

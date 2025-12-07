@@ -18,9 +18,7 @@ limitations under the License.
 
 #include <string>
 
-#include "absl/status/status.h"
 #include "tensorflow/core/lib/core/status.h"
-#include "tensorflow/core/platform/types.h"
 
 namespace stream_executor {
 class Platform;
@@ -30,7 +28,7 @@ namespace tensorflow {
 
 // Initializes the PluggableDevice platform and returns OK if the
 // PluggableDevice platform could be initialized.
-absl::Status ValidatePluggableDeviceMachineManager(const string& platform_name);
+Status ValidatePluggableDeviceMachineManager(const string& platform_name);
 
 // Returns the PluggableDevice machine manager singleton, creating it and
 // initializing the PluggableDevices on the machine if needed the first time it

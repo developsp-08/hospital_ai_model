@@ -52,9 +52,8 @@ struct ControlFlowInfo {
 // NOTE(yuanbyu): For now, we require all sends/recvs have iteration level 0.
 // This essentially means there can't be multiple serial Nexts in an iteration,
 // which all sane front-ends should satisfy.
-absl::Status BuildControlFlowInfo(
-    const Graph* g, std::vector<ControlFlowInfo>* info,
-    std::vector<string>* unreachable_nodes = nullptr);
+Status BuildControlFlowInfo(const Graph* g, std::vector<ControlFlowInfo>* info,
+                            std::vector<string>* unreachable_nodes = nullptr);
 
 }  // namespace tensorflow
 

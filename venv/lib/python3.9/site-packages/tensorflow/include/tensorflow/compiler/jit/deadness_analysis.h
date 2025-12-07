@@ -73,8 +73,8 @@ class DeadnessAnalysis {
     friend class DeadnessAnalysis;
   };
 
-  virtual absl::StatusOr<DeadnessPredicate> GetPredicateFor(Node* n,
-                                                            int oidx) const = 0;
+  virtual tsl::StatusOr<DeadnessPredicate> GetPredicateFor(Node* n,
+                                                           int oidx) const = 0;
 
   // Prints out the internal state of this instance.  For debugging purposes
   // only.
@@ -85,8 +85,8 @@ class DeadnessAnalysis {
 
   // Run the deadness analysis over `graph` and returns an error or a populated
   // instance of DeadnessAnalysis in `result`.
-  static absl::Status Run(const Graph& graph,
-                          std::unique_ptr<DeadnessAnalysis>* result);
+  static Status Run(const Graph& graph,
+                    std::unique_ptr<DeadnessAnalysis>* result);
 
  protected:
   static DeadnessPredicate MakeDeadnessPredicate(void* pred) {

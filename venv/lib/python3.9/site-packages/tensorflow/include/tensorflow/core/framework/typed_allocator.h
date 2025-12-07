@@ -56,8 +56,7 @@ class TypedAllocator {
                          size_t num_elements) {
     if (ptr) {
       RunDtor<T>(raw_allocator, ptr, num_elements);
-      raw_allocator->DeallocateRaw(ptr, Allocator::kAllocatorAlignment,
-                                   sizeof(T) * num_elements);
+      raw_allocator->DeallocateRaw(ptr);
     }
   }
 

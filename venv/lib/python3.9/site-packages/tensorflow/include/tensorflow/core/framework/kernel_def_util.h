@@ -23,8 +23,8 @@ namespace tensorflow {
 
 // Returns whether the attrs satisfy the constraints in the kernel_def. Returns
 // an error if attrs in kernel_def are not found, or have a mismatching type.
-absl::Status KernelAttrsMatch(const KernelDef& kernel_def, AttrSlice attrs,
-                              bool* match);
+Status KernelAttrsMatch(const KernelDef& kernel_def, AttrSlice attrs,
+                        bool* match);
 
 }  // namespace tensorflow
 

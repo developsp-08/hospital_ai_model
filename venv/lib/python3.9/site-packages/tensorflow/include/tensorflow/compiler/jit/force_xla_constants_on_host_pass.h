@@ -28,7 +28,7 @@ class ForceXlaConstantsOnHostPass : public GraphOptimizationPass {
  public:
   ForceXlaConstantsOnHostPass() = default;
 
-  absl::Status Run(const GraphOptimizationPassOptions& options) override;
+  Status Run(const GraphOptimizationPassOptions& options) override;
 };
 
 }  // namespace tensorflow

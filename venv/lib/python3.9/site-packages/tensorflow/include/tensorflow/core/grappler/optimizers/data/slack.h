@@ -35,7 +35,7 @@ class Slack : public TFDataOptimizerBase {
 
   bool UsesFunctionLibrary() const override { return false; }
 
-  absl::Status Init(
+  Status Init(
       const tensorflow::RewriterConfig_CustomGraphOptimizer* config) override {
     if (!config) return errors::InvalidArgument("Config parameter required.");
 
@@ -45,19 +45,18 @@ class Slack : public TFDataOptimizerBase {
       return errors::InvalidArgument("Invalid `slack_period` parameter: ",
                                      slack_period_param);
     }
-    return absl::OkStatus();
+    return OkStatus();
   }
 
-  absl::Status OptimizeAndCollectStats(Cluster* cluster,
-                                       const GrapplerItem& item,
-                                       GraphDef* output,
-                                       OptimizationStats* stats) override;
+  Status OptimizeAndCollectStats(Cluster* cluster, const GrapplerItem& item,
+                                 GraphDef* output,
+                                 OptimizationStats* stats) override;
 
  private:
   int64_t slack_period_ = -1;
 
-  absl::Status RecursivelyHandleOp(const MutableGraphView& graph,
-                                   NodeDef* dataset_node);
+  Status RecursivelyHandleOp(const MutableGraphView& graph,
+                             NodeDef* dataset_node);
 };
 
 }  // namespace grappler

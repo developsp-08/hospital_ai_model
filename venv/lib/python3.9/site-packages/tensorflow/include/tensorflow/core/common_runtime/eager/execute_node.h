@@ -54,20 +54,19 @@ class ExecuteNodeArgs : public EagerKernelArgs {
  public:
   explicit ExecuteNodeArgs(int count) : EagerKernelArgs(count) {}
 
-  absl::Status Init(EagerContext* ctx,
-                    const absl::InlinedVector<TensorHandle*, 4>& op_inputs,
-                    const core::RefCountPtr<KernelAndDevice>& kernel);
+  Status Init(EagerContext* ctx,
+              const absl::InlinedVector<TensorHandle*, 4>& op_inputs,
+              const core::RefCountPtr<KernelAndDevice>& kernel);
 
-  absl::Status GetLocalArg(const FunctionArgIndex& index,
-                           Tensor* val) const override;
+  Status GetLocalArg(const FunctionArgIndex& index, Tensor* val) const override;
 
   bool HasRemoteOrPackedInputs() const override {
     return has_remote_inputs_ || has_packed_inputs_;
   };
 
 #if !defined(IS_MOBILE_PLATFORM)
-  absl::Status GetRemoteArg(const FunctionArgIndex& index,
-                            eager::RemoteTensorHandle* val) const override {
+  Status GetRemoteArg(const FunctionArgIndex& index,
+                      eager::RemoteTensorHandle* val) const override {
     return serialize_remote_handle_(index, val);
   }
 #endif  // IS_MOBILE_PLATFORM
@@ -80,17 +79,15 @@ class ExecuteNodeArgs : public EagerKernelArgs {
 #endif  // IS_MOBILE_PLATFORM
 
   // Initialize a packed TensorHandle which is the `index`-th argument.
-  absl::Status InitPackedHandle(int index, EagerContext* ctx,
-                                Device* input_device,
-                                TensorHandle* packed_handle);
+  Status InitPackedHandle(int index, EagerContext* ctx, Device* input_device,
+                          TensorHandle* packed_handle);
 
   bool has_remote_inputs_ = false;
   bool has_packed_inputs_ = false;
   // Maps from the index of a packed arg to a list of sub-args.
-  absl::flat_hash_map<int, absl::InlinedVector<TensorValue, 4UL>> packed_args_;
+  absl::flat_hash_map<int, gtl::InlinedVector<TensorValue, 4>> packed_args_;
 #if !defined(IS_MOBILE_PLATFORM)
-  std::function<absl::Status(const FunctionArgIndex&,
-                             eager::RemoteTensorHandle*)>
+  std::function<Status(const FunctionArgIndex&, eager::RemoteTensorHandle*)>
       serialize_remote_handle_;
 #endif  // IS_MOBILE_PLATFORM
 };
@@ -115,12 +112,12 @@ class ExecuteNode : public EagerNode {
         retvals_(retvals),
         stack_trace_(stack_trace) {}
 
-  absl::Status Run() override {
+  Status Run() override {
     int i = 0;
     for (TensorHandle* h : inputs_) {
       if (h->RefCountIsOne()) {
         const Device* d = ctx_->CanonicalDevice(kernel_->InputDevice(i));
-        absl::Status s = h->Unprotect(d);
+        Status s = h->Unprotect(d);
         if (!s.ok()) {
           VLOG(1) << "Unable to unprotect tensor: " << s;
         }
@@ -132,7 +129,7 @@ class ExecuteNode : public EagerNode {
                               stack_trace_);
   }
 
-  void Abort(absl::Status status) override {}
+  void Abort(Status status) override {}
 
   std::string DebugString() const override {
     std::string out = "[ExecuteNode]";
@@ -193,19 +190,19 @@ class AsyncExecuteNode : public EagerNode {
     }
   }
 
-  absl::Status Run() override {
+  Status Run() override {
     int i = 0;
     for (TensorHandle* h : inputs_) {
       if (h->RefCountIsOne()) {
         const Device* d = ctx_->CanonicalDevice(kernel_->InputDevice(i));
-        absl::Status s = h->Unprotect(d);
+        Status s = h->Unprotect(d);
         if (!s.ok()) {
           VLOG(1) << "Unable to unprotect tensor: " << s;
         }
       }
       ++i;
     }
-    absl::Status status = EagerKernelExecute(
+    Status status = EagerKernelExecute(
         ctx_, inputs_, eager_func_params_, kernel_, graph_collector_,
         cancellation_manager_, absl::MakeSpan(retvals_), stack_trace_);
     if (!status.ok()) {
@@ -219,10 +216,10 @@ class AsyncExecuteNode : public EagerNode {
     }
     // If status is ok, EagerKernelExecute would have called SetTensor on
     // all the output handles.
-    return absl::OkStatus();
+    return OkStatus();
   }
 
-  void Abort(absl::Status status) override {
+  void Abort(Status status) override {
     int i = 0;
     for (auto handle : retvals_) {
       handle->Poison(status, ctx_->CanonicalDevice(kernel_->OutputDevice(i)));

@@ -39,8 +39,7 @@ class RingReducer : public RingAlg {
   // collective threadpool.
   void Run(StatusCallback done) override;
 
-  absl::Status InitializeCollectiveParams(
-      CollectiveParams* col_params) override;
+  Status InitializeCollectiveParams(CollectiveParams* col_params) override;
 
  protected:
   void InitRingField(RingField* rf, int chunk_idx, int subdiv_idx,

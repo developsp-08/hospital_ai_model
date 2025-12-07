@@ -39,11 +39,11 @@ std::vector<Tindices> ParseRowStartIndices(
 // [0, 1.0). If config is a matrix then config must have shape M x 3, all of
 // its entries must be positive, and entries in the last column may not
 // exceed 1.0. If config is a matrix then it may not be empty.
-absl::Status ValidateSparseMatrixShardingConfig(const Tensor& config);
+Status ValidateSparseMatrixShardingConfig(const Tensor& config);
 
 // Returns OkStatus() if and only if config is a float scalar or a non-empty
 // matrix with dimensions M x 2.
-absl::Status ValidateScalarQuantityShardingConfig(const Tensor& config);
+Status ValidateScalarQuantityShardingConfig(const Tensor& config);
 
 // Returns the last entry of the first row in config_mat for which the first
 // two entries are no smaller than the respective entries in key. If no such

@@ -71,18 +71,17 @@ struct OptimizedFunctionGraphInfo {
   OptimizedFunctionGraphInfo(OptimizedFunctionGraphInfo& info) = delete;
   OptimizedFunctionGraphInfo& operator=(OptimizedFunctionGraphInfo& info) =
       delete;
-  OptimizedFunctionGraphInfo(OptimizedFunctionGraphInfo&& info) =
-      default;  // NOLINT
-  OptimizedFunctionGraphInfo& operator=(
-      OptimizedFunctionGraphInfo&& info) noexcept = default;  // NOLINT
+  OptimizedFunctionGraphInfo(OptimizedFunctionGraphInfo&& info) = default;
+  OptimizedFunctionGraphInfo& operator=(OptimizedFunctionGraphInfo&& info) =
+      default;
 
   // Converts from the struct to OptimizedFunctionGraph proto.
   static OptimizedFunctionGraph ToProto(const OptimizedFunctionGraphInfo& info);
 
   // Converts from the proto to struct OptimizedFunctionGraphInfo. Returns error
   // if the conversion fails.
-  static absl::StatusOr<OptimizedFunctionGraphInfo> FromProto(
-      OptimizedFunctionGraph&& proto);
+  static StatusOr<OptimizedFunctionGraphInfo> FromProto(
+      const OptimizedFunctionGraph& proto);
 };
 
 }  // namespace tensorflow

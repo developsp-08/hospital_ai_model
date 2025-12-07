@@ -54,14 +54,13 @@ class WorkerCacheWrapper : public WorkerCacheInterface {
     return wrapped_->ReleaseWorker(target, worker);
   }
 
-  absl::Status GetEagerClientCache(
+  Status GetEagerClientCache(
       std::unique_ptr<eager::EagerClientCache>* eager_client_cache) override {
     return wrapped_->GetEagerClientCache(eager_client_cache);
   }
 
-  absl::Status GetCoordinationClientCache(
-      std::unique_ptr<CoordinationClientCache>* coordination_client_cache)
-      override {
+  Status GetCoordinationClientCache(std::unique_ptr<CoordinationClientCache>*
+                                        coordination_client_cache) override {
     return wrapped_->GetCoordinationClientCache(coordination_client_cache);
   }
 

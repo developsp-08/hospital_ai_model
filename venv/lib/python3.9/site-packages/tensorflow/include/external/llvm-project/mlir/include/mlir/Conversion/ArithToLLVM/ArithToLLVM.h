@@ -22,7 +22,7 @@ class Pass;
 #include "mlir/Conversion/Passes.h.inc"
 
 namespace arith {
-void populateArithToLLVMConversionPatterns(const LLVMTypeConverter &converter,
+void populateArithToLLVMConversionPatterns(LLVMTypeConverter &converter,
                                            RewritePatternSet &patterns);
 
 void registerConvertArithToLLVMInterface(DialectRegistry &registry);

@@ -36,7 +36,6 @@ class MutableOperandRangeRange;
 
 //===----------------------------------------------------------------------===//
 // OperandRange
-//===----------------------------------------------------------------------===//
 
 /// This class implements the operand iterators for the Operation class.
 class OperandRange final : public llvm::detail::indexed_accessor_range_base<
@@ -74,7 +73,6 @@ private:
 
 //===----------------------------------------------------------------------===//
 // OperandRangeRange
-//===----------------------------------------------------------------------===//
 
 /// This class represents a contiguous range of operand ranges, e.g. from a
 /// VariadicOfVariadic operand group.
@@ -111,7 +109,6 @@ private:
 
 //===----------------------------------------------------------------------===//
 // MutableOperandRange
-//===----------------------------------------------------------------------===//
 
 /// This class provides a mutable adaptor for a range of operands. It allows for
 /// setting, inserting, and erasing operands from the given range.
@@ -126,7 +123,7 @@ public:
   /// and range length. `operandSegments` is an optional set of operand segments
   /// to be updated when mutating the operand list.
   MutableOperandRange(Operation *owner, unsigned start, unsigned length,
-                      ArrayRef<OperandSegment> operandSegments = {});
+                      ArrayRef<OperandSegment> operandSegments = std::nullopt);
   MutableOperandRange(Operation *owner);
 
   /// Construct a new mutable range for the given OpOperand.
@@ -157,9 +154,6 @@ public:
 
   /// Returns if the current range is empty.
   bool empty() const { return size() == 0; }
-
-  /// Explicit conversion to an OperandRange.
-  OperandRange getAsOperandRange() const;
 
   /// Allow implicit conversion to an OperandRange.
   operator OperandRange() const;
@@ -199,7 +193,6 @@ private:
 
 //===----------------------------------------------------------------------===//
 // MutableOperandRangeRange
-//===----------------------------------------------------------------------===//
 
 /// This class represents a contiguous range of mutable operand ranges, e.g.
 /// from a VariadicOfVariadic operand group.
@@ -239,7 +232,6 @@ private:
 
 //===----------------------------------------------------------------------===//
 // ResultRange
-//===----------------------------------------------------------------------===//
 
 /// This class implements the result iterators for the Operation class.
 class ResultRange final
@@ -373,7 +365,6 @@ private:
 
 //===----------------------------------------------------------------------===//
 // ValueRange
-//===----------------------------------------------------------------------===//
 
 /// This class provides an abstraction over the different types of ranges over
 /// Values. In many cases, this prevents the need to explicitly materialize a
@@ -397,11 +388,9 @@ public:
             typename = std::enable_if_t<
                 std::is_constructible<ArrayRef<Value>, Arg>::value &&
                 !std::is_convertible<Arg, Value>::value>>
-  ValueRange(Arg &&arg LLVM_LIFETIME_BOUND)
-      : ValueRange(ArrayRef<Value>(std::forward<Arg>(arg))) {}
-  ValueRange(const Value &value LLVM_LIFETIME_BOUND)
-      : ValueRange(&value, /*count=*/1) {}
-  ValueRange(const std::initializer_list<Value> &values LLVM_LIFETIME_BOUND)
+  ValueRange(Arg &&arg) : ValueRange(ArrayRef<Value>(std::forward<Arg>(arg))) {}
+  ValueRange(const Value &value) : ValueRange(&value, /*count=*/1) {}
+  ValueRange(const std::initializer_list<Value> &values)
       : ValueRange(ArrayRef<Value>(values)) {}
   ValueRange(iterator_range<OperandRange::iterator> values)
       : ValueRange(OperandRange(values)) {}
@@ -409,7 +398,7 @@ public:
       : ValueRange(ResultRange(values)) {}
   ValueRange(ArrayRef<BlockArgument> values)
       : ValueRange(ArrayRef<Value>(values.data(), values.size())) {}
-  ValueRange(ArrayRef<Value> values = {});
+  ValueRange(ArrayRef<Value> values = std::nullopt);
   ValueRange(OperandRange values);
   ValueRange(ResultRange values);
 

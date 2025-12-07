@@ -40,9 +40,8 @@ class ConstantFolding : public GraphOptimizer {
  public:
   // The size limit will only be considered if the newly created node is greater
   // than original_size (optional).
-  static absl::Status CreateNodeDef(const string& name,
-                                    const TensorValue& tensor, NodeDef* node,
-                                    size_t original_size = 0);
+  static Status CreateNodeDef(const string& name, const TensorValue& tensor,
+                              NodeDef* node, size_t original_size = 0);
   static string AddControlDependency(const string& input_name, GraphDef* graph,
                                      NodeMap* node_map);
 
@@ -59,29 +58,29 @@ class ConstantFolding : public GraphOptimizer {
 
   bool UsesFunctionLibrary() const override { return false; }
 
-  absl::Status Optimize(Cluster* cluster, const GrapplerItem& item,
-                        GraphDef* output) override;
+  Status Optimize(Cluster* cluster, const GrapplerItem& item,
+                  GraphDef* output) override;
 
  private:
   bool ForwardInputs(NodeDef* node, absl::Span<const int> inputs_to_forward);
-  string OptimizedNodeName(const NodeDef& node, absl::string_view suffix) const;
-  bool OptimizedNodeExists(const NodeDef& node, absl::string_view suffix) const;
+  string OptimizedNodeName(const NodeDef& node, StringPiece suffix) const;
+  bool OptimizedNodeExists(const NodeDef& node, StringPiece suffix) const;
 
   bool IsReallyConstant(const NodeDef& node) const;
 
   bool GetTensorFromConstNode(const string& node_name_or_input, Tensor* tensor);
 
-  absl::Status MaterializeShapes(const GraphProperties& properties);
+  Status MaterializeShapes(const GraphProperties& properties);
 
-  absl::Status MaterializeBroadcastGradientArgs(
-      const NodeDef& node, const GraphProperties& properties);
-  absl::Status MaterializeReductionIndices(NodeDef* node,
-                                           const GraphProperties& properties);
-  absl::Status MaterializeConstantValuedNode(NodeDef* node,
-                                             const GraphProperties& properties);
-  absl::Status MaterializeOutputValues(NodeDef* node,
+  Status MaterializeBroadcastGradientArgs(const NodeDef& node,
+                                          const GraphProperties& properties);
+  Status MaterializeReductionIndices(NodeDef* node,
+                                     const GraphProperties& properties);
+  Status MaterializeConstantValuedNode(NodeDef* node,
                                        const GraphProperties& properties);
-  absl::Status MaterializeConstants(const GraphProperties& properties);
+  Status MaterializeOutputValues(NodeDef* node,
+                                 const GraphProperties& properties);
+  Status MaterializeConstants(const GraphProperties& properties);
 
   bool IsFoldable(const NodeDef& node, const GraphProperties* properties);
   bool IsFoldableUncached(const NodeDef& node,
@@ -89,17 +88,16 @@ class ConstantFolding : public GraphOptimizer {
   bool MaybeFoldable(const NodeDef& node,
                      const GraphProperties* properties) const;
 
-  absl::Status EvaluateNode(
-      const NodeDef& node, const absl::InlinedVector<TensorValue, 4UL>& inputs,
-      absl::InlinedVector<TensorValue, 4UL>* output) const;
+  Status EvaluateNode(const NodeDef& node,
+                      const gtl::InlinedVector<TensorValue, 4>& inputs,
+                      gtl::InlinedVector<TensorValue, 4>* output) const;
 
-  absl::Status EvaluateOneFoldable(const NodeDef& node,
-                                   std::vector<NodeDef>* outputs,
-                                   bool* result_too_large);
+  Status EvaluateOneFoldable(const NodeDef& node, std::vector<NodeDef>* outputs,
+                             bool* result_too_large);
 
-  absl::Status FoldMergeNode(NodeDef* node, GraphDef* output_graph);
-  absl::Status FoldNode(NodeDef* node, GraphDef* output_graph,
-                        bool* result_too_large);
+  Status FoldMergeNode(NodeDef* node, GraphDef* output_graph);
+  Status FoldNode(NodeDef* node, GraphDef* output_graph,
+                  bool* result_too_large);
 
   bool IsOnes(const NodeDef& node) const;
   bool IsZeros(const NodeDef& node) const;
@@ -118,32 +116,29 @@ class ConstantFolding : public GraphOptimizer {
                                              const GraphProperties& properties,
                                              NodeDef* node, GraphDef* graph);
   void ReplaceSubtractionFromZeroByNegation(NodeDef* node, GraphDef* graph);
-  absl::Status ReplaceOperationWithConstant(double value,
-                                            const GraphProperties& properties,
-                                            const TensorShapeProto& shape,
-                                            NodeDef* node, GraphDef* graph);
+  Status ReplaceOperationWithConstant(double value,
+                                      const GraphProperties& properties,
+                                      const TensorShapeProto& shape,
+                                      NodeDef* node, GraphDef* graph);
 
   // Notice: Destroys *value.
-  absl::Status ReplaceOperationWithConstantTensor(DataType dtype,
-                                                  TensorProto* value,
-                                                  NodeDef* node,
-                                                  GraphDef* graph);
+  Status ReplaceOperationWithConstantTensor(DataType dtype, TensorProto* value,
+                                            NodeDef* node, GraphDef* graph);
 
   void ReplaceDivisionOfOnesByReciprocal(NodeDef* node, GraphDef* graph);
-  absl::Status FoldGraph(const GraphProperties& properties, GraphDef* output,
-                         absl::flat_hash_set<string>* nodes_to_not_simplify);
+  Status FoldGraph(const GraphProperties& properties, GraphDef* output,
+                   absl::flat_hash_set<string>* nodes_to_not_simplify);
 
-  absl::Status IsSimplifiableReshape(const NodeDef& node,
-                                     const GraphProperties& properties) const;
-  absl::Status SimplifyGraph(
-      GraphDef* optimized_graph, GraphProperties* properties,
-      absl::flat_hash_set<string>* nodes_to_not_simplify);
-  absl::Status SimplifyNode(NodeDef* node, GraphDef* optimized_graph,
-                            GraphProperties* properties);
+  Status IsSimplifiableReshape(const NodeDef& node,
+                               const GraphProperties& properties) const;
+  Status SimplifyGraph(GraphDef* optimized_graph, GraphProperties* properties,
+                       absl::flat_hash_set<string>* nodes_to_not_simplify);
+  Status SimplifyNode(NodeDef* node, GraphDef* optimized_graph,
+                      GraphProperties* properties);
 
-  absl::Status RunOptimizationPass(Cluster* cluster, GrapplerItem* item,
-                                   GraphProperties* properties,
-                                   GraphDef* optimized_graph);
+  Status RunOptimizationPass(Cluster* cluster, GrapplerItem* item,
+                             GraphProperties* properties,
+                             GraphDef* optimized_graph);
 
   // Applies partial constant folding for Concat which is not commutative.
   // Returns true if the transformation applied successfully.
@@ -214,10 +209,9 @@ class ConstantFolding : public GraphOptimizer {
   // Simplifies arithmetic operations with ones or zeros. Returns the status,
   // and updates the success input argument that denotes if any simplification
   // was applied.
-  absl::Status SimplifyArithmeticOperations(const GraphProperties& properties,
-                                            bool use_shape_info,
-                                            GraphDef* optimized_graph,
-                                            NodeDef* node);
+  Status SimplifyArithmeticOperations(const GraphProperties& properties,
+                                      bool use_shape_info,
+                                      GraphDef* optimized_graph, NodeDef* node);
 
   // Simplifies a Reshape operation to an Identity operation if applicable.
   bool SimplifyReshape(const GraphProperties& properties, bool use_shape_info,
@@ -238,8 +232,7 @@ class ConstantFolding : public GraphOptimizer {
   // input dimensions to reduce along are all of size 1 and keep_dims is true).
   bool IsReductionSimplifiableToIdentity(
       const NodeDef& node, const TensorShapeProto& input_shape, bool keep_dims,
-      const absl::InlinedVector<TensorValue, 4UL>& reduction_indices_vector)
-      const;
+      const gtl::InlinedVector<TensorValue, 4>& reduction_indices_vector) const;
   // Changes a reduction into an Identity op, returning true on success.
   bool ReplaceReductionWithIdentity(NodeDef* node) const;
 
@@ -277,24 +270,21 @@ class ConstantFolding : public GraphOptimizer {
                        GraphDef* optimized_graph, NodeDef* node);
 
   // Simplifies a Pad operation to an Identity operation if applicable.
-  absl::Status SimplifyPad(const GraphProperties& properties,
-                           bool use_shape_info, GraphDef* optimized_graph,
-                           NodeDef* node);
+  Status SimplifyPad(const GraphProperties& properties, bool use_shape_info,
+                     GraphDef* optimized_graph, NodeDef* node);
 
   // Simplifies a Tile operation to an Identity operation if applicable.
-  absl::Status SimplifyTile(const GraphProperties& properties,
-                            bool use_shape_info, GraphDef* optimized_graph,
-                            NodeDef* node);
+  Status SimplifyTile(const GraphProperties& properties, bool use_shape_info,
+                      GraphDef* optimized_graph, NodeDef* node);
 
   // Simplifies a StridedSlice operation to an Identity operation if applicable.
-  absl::Status SimplifyStridedSlice(const GraphProperties& properties,
-                                    bool use_shape_info,
-                                    GraphDef* optimized_graph, NodeDef* node);
+  Status SimplifyStridedSlice(const GraphProperties& properties,
+                              bool use_shape_info, GraphDef* optimized_graph,
+                              NodeDef* node);
 
   // Simplifies a Slice operation to an Identity operation if applicable.
-  absl::Status SimplifySlice(const GraphProperties& properties,
-                             bool use_shape_info, GraphDef* optimized_graph,
-                             NodeDef* node);
+  Status SimplifySlice(const GraphProperties& properties, bool use_shape_info,
+                       GraphDef* optimized_graph, NodeDef* node);
 
   // Simplify a Case operation where the output_idx is known.
   bool SimplifyCase(GraphDef* optimized_graph, NodeDef* node);
@@ -308,9 +298,8 @@ class ConstantFolding : public GraphOptimizer {
                                       GraphDef* optimized_graph, NodeDef* node);
 
   // Removes Reverse op over dimensions with size 1.
-  absl::Status RemoveReverse(const GraphProperties& properties,
-                             bool use_shape_info, GraphDef* optimized_graph,
-                             NodeDef* node);
+  Status RemoveReverse(const GraphProperties& properties, bool use_shape_info,
+                       GraphDef* optimized_graph, NodeDef* node);
 
   // Removes RandomShuffle op if it is scalar or first dimension is of size 1.
   void RemoveRandomShuffle(const GraphProperties& properties,
@@ -318,10 +307,9 @@ class ConstantFolding : public GraphOptimizer {
                            NodeDef* node);
 
   // Removes Shuffle or Transpose op over dimensions of size 1.
-  absl::Status RemoveShuffleOrTranspose(const GraphProperties& properties,
-                                        bool use_shape_info,
-                                        GraphDef* optimized_graph,
-                                        NodeDef* node);
+  Status RemoveShuffleOrTranspose(const GraphProperties& properties,
+                                  bool use_shape_info,
+                                  GraphDef* optimized_graph, NodeDef* node);
 
   // Removes Split or SplitV node if possible.
   void RemoveSplitOrSplitV(const GraphProperties& properties,
@@ -331,8 +319,8 @@ class ConstantFolding : public GraphOptimizer {
   bool MergeConcat(bool use_shape_info, GraphProperties* properties,
                    GraphDef* optimized_graph, NodeDef* node);
 
-  absl::Status AddQuantizedMatMulMinMaxOutConstNodes(NodeDef* node,
-                                                     GraphDef* optimized_graph);
+  Status AddQuantizedMatMulMinMaxOutConstNodes(NodeDef* node,
+                                               GraphDef* optimized_graph);
 
   // Points to an externally provided device or to owned_device_;
   RewriterConfig::Toggle opt_level_;

@@ -31,9 +31,8 @@ class VersionDef;
 //   TF_RETURN_IF_ERROR(CheckVersions(versions, TF_GRAPH_DEF_VERSION,
 //                                    TF_GRAPH_DEF_VERSION_MIN_PRODUCER,
 //                                    "GraphDef", "graph"));
-absl::Status CheckVersions(const VersionDef& versions, int consumer,
-                           int min_producer, const char* upper_name,
-                           const char* lower_name);
+Status CheckVersions(const VersionDef& versions, int consumer, int min_producer,
+                     const char* upper_name, const char* lower_name);
 
 }  // namespace tensorflow
 

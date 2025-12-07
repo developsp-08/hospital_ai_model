@@ -31,9 +31,8 @@ namespace tensorflow {
 //
 // Preconditions:
 // Same as for `FunctionalizeControlFlow` (see comment there).
-absl::Status FunctionalizeWhileLoop(Graph* graph,
-                                    FunctionLibraryDefinition* library,
-                                    const NodeFilter& node_filter = {});
+Status FunctionalizeWhileLoop(Graph* graph, FunctionLibraryDefinition* library,
+                              const NodeFilter& node_filter = {});
 
 }  // namespace tensorflow
 

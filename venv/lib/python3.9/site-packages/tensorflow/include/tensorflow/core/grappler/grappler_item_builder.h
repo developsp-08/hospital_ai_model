@@ -64,9 +64,8 @@ struct ItemConfig {
 // Method for optimizing the graph def (including function inlining and other
 // optimizations). This is optimizations from common_runtime, NOT Grappler
 // function optimizer.
-absl::Status RuntimeGraphOptimizer(const GraphDef& graph_def_arg,
-                                   GraphDef* output_graph_def,
-                                   const ItemConfig& cfg);
+Status RuntimeGraphOptimizer(const GraphDef& graph_def_arg,
+                             GraphDef* output_graph_def, const ItemConfig& cfg);
 
 // Factory method for creating a GrapplerItem from a MetaGraphDef.
 // Returns nullptr if the given meta_graph cannot be converted.

@@ -59,9 +59,9 @@ class MapDefunOp : public AsyncOpKernel {
                      ComputeOptions* compute_opts, bool always_collect_stats);
 
   // Get inputs to Compute and check that they are valid.
-  absl::Status SetupArgs(OpKernelContext* ctx, ComputeOptions** compute_opts);
+  Status SetupArgs(OpKernelContext* ctx, ComputeOptions** compute_opts);
 
-  absl::Status SetupOutputs(OpKernelContext* ctx, ComputeOptions* opts);
+  Status SetupOutputs(OpKernelContext* ctx, ComputeOptions* opts);
 
   FunctionLibraryRuntime::Handle func_handle_;
   std::vector<PartialTensorShape> output_shapes_;

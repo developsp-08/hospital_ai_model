@@ -35,22 +35,22 @@ namespace tensorflow {
 //    - num_bits out of range.
 //    - g is null.
 //    - More than 1 unknown ops encountered.
-absl::Status DoQuantizeTraining(int32_t num_bits, const string& quant_op_type,
-                                Graph* g);
+Status DoQuantizeTraining(int32_t num_bits, const string& quant_op_type,
+                          Graph* g);
 
 // Converts the input serialized GraphDef and returns a rewritten serialized
 // GraphDef for quantized training.
-absl::Status DoQuantizeTrainingOnSerializedGraphDef(const string& input_graph,
-                                                    int32_t num_bits,
-                                                    const string& quant_op_type,
-                                                    string* result_graph);
+Status DoQuantizeTrainingOnSerializedGraphDef(const string& input_graph,
+                                              int32_t num_bits,
+                                              const string& quant_op_type,
+                                              string* result_graph);
 
 // Converts the input GraphDef and returns a rewritten GraphDef for quantized
 // training.
-absl::Status DoQuantizeTrainingOnGraphDef(const GraphDef& input_graphdef,
-                                          int32_t num_bits,
-                                          const string& quant_op_type,
-                                          GraphDef* result_graphdef);
+Status DoQuantizeTrainingOnGraphDef(const GraphDef& input_graphdef,
+                                    int32_t num_bits,
+                                    const string& quant_op_type,
+                                    GraphDef* result_graphdef);
 
 }  // namespace tensorflow
 

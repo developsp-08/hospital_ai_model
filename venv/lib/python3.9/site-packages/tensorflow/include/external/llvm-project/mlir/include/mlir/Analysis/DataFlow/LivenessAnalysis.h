@@ -79,8 +79,8 @@ class LivenessAnalysis : public SparseBackwardDataFlowAnalysis<Liveness> {
 public:
   using SparseBackwardDataFlowAnalysis::SparseBackwardDataFlowAnalysis;
 
-  LogicalResult visitOperation(Operation *op, ArrayRef<Liveness *> operands,
-                               ArrayRef<const Liveness *> results) override;
+  void visitOperation(Operation *op, ArrayRef<Liveness *> operands,
+                      ArrayRef<const Liveness *> results) override;
 
   void visitBranchOperand(OpOperand &operand) override;
 

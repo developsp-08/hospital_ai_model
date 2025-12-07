@@ -33,21 +33,23 @@ namespace mlir {
 namespace tfg {
 
 // Get the name of a value as if it were an edge in a graph.
-absl::StatusOr<std::string> GetValueName(Value value, TFGraphDialect *dialect);
+tensorflow::StatusOr<std::string> GetValueName(Value value,
+                                               TFGraphDialect *dialect);
 
 // Convert a TFG graph directly to GraphDef. Graph functions in the module are
 // added to the GraphDef's function library.
-absl::Status ConvertToGraphDef(ModuleOp module, tensorflow::GraphDef *graph);
+tensorflow::Status ConvertToGraphDef(ModuleOp module,
+                                     tensorflow::GraphDef *graph);
 
 // Convert a single TFG op to NodeDef. This utliity function requires a callback
 // `get_value_name` that returns the edge name of the given operand.
-absl::Status ConvertToNodeDef(
+tensorflow::Status ConvertToNodeDef(
     Operation *op, tensorflow::NodeDef *node, TFGraphDialect *dialect,
-    function_ref<absl::StatusOr<std::string>(Value)> get_value_name);
+    function_ref<tensorflow::StatusOr<std::string>(Value)> get_value_name);
 
 // Convert a single TFG function to a FunctionDef and add it to the function
 // library. If a function with the same name already exists, replace it.
-absl::Status ConvertToFunctionDef(
+tensorflow::Status ConvertToFunctionDef(
     GraphFuncOp func, tensorflow::FunctionLibraryDefinition &library);
 
 }  // namespace tfg

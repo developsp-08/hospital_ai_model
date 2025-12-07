@@ -31,9 +31,9 @@ namespace tensorflow::full_type {
 // expected full_type information. If an error raised about bad full
 // time information causes a breakage, changing `SetMemoryTypeForArgs` to
 // `WeakSetMemoryTypeForArgs` is a possible work around.
-absl::Status SetMemoryTypeForArgs(const absl::InlinedVector<Node*, 4UL>& nodes,
-                                  const DataTypeVector& dtypes,
-                                  MemoryTypeVector& memory_types);
+Status SetMemoryTypeForArgs(const gtl::InlinedVector<Node*, 4>& nodes,
+                            const DataTypeVector& dtypes,
+                            MemoryTypeVector& memory_types);
 
 // TODO(b/258849883) Delete the `Weak...` versions of these functions once
 // everything is working with the version without `Weak`.
@@ -41,9 +41,9 @@ absl::Status SetMemoryTypeForArgs(const absl::InlinedVector<Node*, 4UL>& nodes,
 // Set the contents of memory_types for args (inputs to functions, "_Arg" ops)
 // based on dtype. Logging of warnings if an int32 arg does not have
 // expected full_type information can be enabled.
-absl::Status WeakSetMemoryTypeForArgs(
-    const absl::InlinedVector<Node*, 4UL>& nodes, const DataTypeVector& dtypes,
-    MemoryTypeVector& memory_types);
+Status WeakSetMemoryTypeForArgs(const gtl::InlinedVector<Node*, 4>& nodes,
+                                const DataTypeVector& dtypes,
+                                MemoryTypeVector& memory_types);
 
 // Set the contents of memory_types for rets (outputs from functions, "_Retval"
 // ops) based on dtype. Raises an error if an int32 ret does not have
@@ -51,33 +51,33 @@ absl::Status WeakSetMemoryTypeForArgs(
 // does not have expected full type information). If an error raised about bad
 // full time information causes a breakage, changing `SetMemoryTypeForRets` to
 // `WeakSetMemoryTypeForRets` is a possible work around.
-absl::Status SetMemoryTypeForRets(const absl::InlinedVector<Node*, 4UL>& nodes,
-                                  const DataTypeVector& dtypes,
-                                  MemoryTypeVector& memory_types);
+Status SetMemoryTypeForRets(const gtl::InlinedVector<Node*, 4>& nodes,
+                            const DataTypeVector& dtypes,
+                            MemoryTypeVector& memory_types);
 
 // Set the contents of memory_types for rets (outputs from functions, "_Retval"
 // ops) based on dtype. Logging of warnings if an int32 ret does not have
 // expected full_type information (i.e. if the source of the input to the ret
 // does not have expected full type information) can be enabled.
-absl::Status WeakSetMemoryTypeForRets(
-    const absl::InlinedVector<Node*, 4UL>& nodes, const DataTypeVector& dtypes,
-    MemoryTypeVector& memory_types);
+Status WeakSetMemoryTypeForRets(const gtl::InlinedVector<Node*, 4>& nodes,
+                                const DataTypeVector& dtypes,
+                                MemoryTypeVector& memory_types);
 
 // Set the contents of alloc_attrs for args (inputs to functions, "_Arg" ops)
 // based on dtype. Raises an error if an int32 arg does not have
 // expected full_type information. If an error raised about bad full
 // time information causes a breakage, changing `SetAllocAttrsForArgs` to
 // `WeakSetAllocAttrsForArgs` is a possible work around.
-absl::Status SetAllocAttrsForArgs(
-    const absl::InlinedVector<Node*, 4UL>& nodes, const DataTypeVector& dtypes,
-    std::vector<AllocatorAttributes>& alloc_attrs);
+Status SetAllocAttrsForArgs(const gtl::InlinedVector<Node*, 4>& nodes,
+                            const DataTypeVector& dtypes,
+                            std::vector<AllocatorAttributes>& alloc_attrs);
 
 // Set the contents of alloc_attrs for args (inputs to functions, "_Arg" ops)
 // based on dtype. Logging of warnings if an int32 arg does not have
 // expected full_type information can be enabled.
-absl::Status WeakSetAllocAttrsForArgs(
-    const absl::InlinedVector<Node*, 4UL>& nodes, const DataTypeVector& dtypes,
-    std::vector<AllocatorAttributes>& alloc_attrs);
+Status WeakSetAllocAttrsForArgs(const gtl::InlinedVector<Node*, 4>& nodes,
+                                const DataTypeVector& dtypes,
+                                std::vector<AllocatorAttributes>& alloc_attrs);
 
 // Set the contents of alloc_attrs for rets (outputs from functions, "_Retval"
 // ops) based on dtype. Raises an error if an int32 ret does not have
@@ -85,17 +85,17 @@ absl::Status WeakSetAllocAttrsForArgs(
 // does not have expected full type information). If an error raised about bad
 // full time information causes a breakage, changing `SetAllocAttrsForRets` to
 // `WeakSetAllocAttrsForRets` is a possible work around.
-absl::Status SetAllocAttrsForRets(
-    const absl::InlinedVector<Node*, 4UL>& nodes, const DataTypeVector& dtypes,
-    std::vector<AllocatorAttributes>& alloc_attrs);
+Status SetAllocAttrsForRets(const gtl::InlinedVector<Node*, 4>& nodes,
+                            const DataTypeVector& dtypes,
+                            std::vector<AllocatorAttributes>& alloc_attrs);
 
 // Set the contents of alloc_attrs for rets (outputs from functions, "_Retval"
 // ops) based on dtype. Logging of warnings if an int32 ret does not have
 // expected full_type information (i.e. if the source of the input to the ret
 // does not have expected full type information) can be enabled.
-absl::Status WeakSetAllocAttrsForRets(
-    const absl::InlinedVector<Node*, 4UL>& nodes, const DataTypeVector& dtypes,
-    std::vector<AllocatorAttributes>& alloc_attrs);
+Status WeakSetAllocAttrsForRets(const gtl::InlinedVector<Node*, 4>& nodes,
+                                const DataTypeVector& dtypes,
+                                std::vector<AllocatorAttributes>& alloc_attrs);
 
 // Set the contents of alloc_attrs for args (inputs to functions, "_Arg" ops)
 // for a single device funtion based on dtype. Raises an error if an int32 arg
@@ -104,7 +104,7 @@ absl::Status WeakSetAllocAttrsForRets(
 // `SingleDeviceSetAllocAttrsForArgs` to `WeakSingleDeviceSetAllocAttrsForArgs`
 // is a possible work around. The DataType specified by the "T" attr of input
 // nodes is used.
-absl::Status SingleDeviceSetAllocAttrsForArgs(
+Status SingleDeviceSetAllocAttrsForArgs(
     std::vector<std::pair<Node*, FunctionArgIndex>> arg_nodes,
     bool ints_on_device, std::vector<AllocatorAttributes>& alloc_attrs);
 
@@ -112,7 +112,7 @@ absl::Status SingleDeviceSetAllocAttrsForArgs(
 // for a single device based on dtype. Logging of warnings if an int32 arg does
 // not have expected full_type information can be enabled. The DataType
 // specified by the "T" attr of input nodes is used.
-absl::Status WeakSingleDeviceSetAllocAttrsForArgs(
+Status WeakSingleDeviceSetAllocAttrsForArgs(
     std::vector<std::pair<Node*, FunctionArgIndex>> arg_nodes,
     bool ints_on_device, std::vector<AllocatorAttributes>& alloc_attrs);
 
@@ -124,7 +124,7 @@ absl::Status WeakSingleDeviceSetAllocAttrsForArgs(
 // `SingleDeviceSetAllocAttrsForRets` to `WeakSingleDeviceSetAllocAttrsForRets`
 // is a possible work around. The DataType specified by the "T" attr of input
 // nodes is used.
-absl::Status SingleDeviceSetAllocAttrsForRets(
+Status SingleDeviceSetAllocAttrsForRets(
     std::vector<std::pair<Node*, int>> ret_nodes, bool ints_on_device,
     std::vector<AllocatorAttributes>& alloc_attrs);
 
@@ -133,7 +133,7 @@ absl::Status SingleDeviceSetAllocAttrsForRets(
 // does not have expected full_type information (i.e. if the source of the input
 // to the ret does not have expected full type information) can be enabled. The
 // DataType specified by the "T" attr of input nodes is used.
-absl::Status WeakSingleDeviceSetAllocAttrsForRets(
+Status WeakSingleDeviceSetAllocAttrsForRets(
     std::vector<std::pair<Node*, int>> ret_nodes, bool ints_on_device,
     std::vector<AllocatorAttributes>& alloc_attrs);
 
@@ -151,7 +151,7 @@ bool LogMemoryTypeMismatch(bool use_host_memory, const FullTypeDef& ft);
 // and raise an error if not. Note the FT is expected to be the full type
 // information for a tensor, not for the whole ouput of an op, i.e. it should
 // not have an outer TFT_PRODUCT.
-absl::Status CheckMemoryType(bool use_host_memory, const FullTypeDef& ft);
+Status CheckMemoryType(bool use_host_memory, const FullTypeDef& ft);
 
 }  // namespace tensorflow::full_type
 

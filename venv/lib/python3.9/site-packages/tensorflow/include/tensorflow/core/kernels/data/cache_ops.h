@@ -78,10 +78,11 @@ class AnonymousMemoryCacheHandleOp
 
  private:
   string name() override;
-  absl::Status CreateResource(
-      OpKernelContext* ctx, std::unique_ptr<FunctionLibraryDefinition> flib_def,
-      std::unique_ptr<ProcessFunctionLibraryRuntime> pflr,
-      FunctionLibraryRuntime* lib, MemoryCacheManager** manager) override;
+  Status CreateResource(OpKernelContext* ctx,
+                        std::unique_ptr<FunctionLibraryDefinition> flib_def,
+                        std::unique_ptr<ProcessFunctionLibraryRuntime> pflr,
+                        FunctionLibraryRuntime* lib,
+                        MemoryCacheManager** manager) override;
 };
 
 // Deletes an instance of cache resource.

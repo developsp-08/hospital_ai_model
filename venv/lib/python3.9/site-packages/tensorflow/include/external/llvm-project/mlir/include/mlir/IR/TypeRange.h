@@ -23,7 +23,6 @@ namespace mlir {
 
 //===----------------------------------------------------------------------===//
 // TypeRange
-//===----------------------------------------------------------------------===//
 
 /// This class provides an abstraction over the various different ranges of
 /// value types. In many cases, this prevents the need to explicitly materialize
@@ -37,7 +36,7 @@ class TypeRange : public llvm::detail::indexed_accessor_range_base<
                       Type, Type, Type> {
 public:
   using RangeBaseT::RangeBaseT;
-  TypeRange(ArrayRef<Type> types = {});
+  TypeRange(ArrayRef<Type> types = std::nullopt);
   explicit TypeRange(OperandRange values);
   explicit TypeRange(ResultRange values);
   explicit TypeRange(ValueRange values);
@@ -47,9 +46,8 @@ public:
                                          values.end().getCurrent()))) {}
   template <typename Arg, typename = std::enable_if_t<std::is_constructible<
                               ArrayRef<Type>, Arg>::value>>
-  TypeRange(Arg &&arg LLVM_LIFETIME_BOUND)
-      : TypeRange(ArrayRef<Type>(std::forward<Arg>(arg))) {}
-  TypeRange(std::initializer_list<Type> types LLVM_LIFETIME_BOUND)
+  TypeRange(Arg &&arg) : TypeRange(ArrayRef<Type>(std::forward<Arg>(arg))) {}
+  TypeRange(std::initializer_list<Type> types)
       : TypeRange(ArrayRef<Type>(types)) {}
 
 private:
@@ -72,7 +70,7 @@ private:
 
 /// Make TypeRange hashable.
 inline ::llvm::hash_code hash_value(TypeRange arg) {
-  return ::llvm::hash_combine_range(arg);
+  return ::llvm::hash_combine_range(arg.begin(), arg.end());
 }
 
 /// Emit a type range to the given output stream.
@@ -83,7 +81,6 @@ inline raw_ostream &operator<<(raw_ostream &os, const TypeRange &types) {
 
 //===----------------------------------------------------------------------===//
 // TypeRangeRange
-//===----------------------------------------------------------------------===//
 
 using TypeRangeRangeIterator =
     llvm::mapped_iterator<llvm::iota_range<unsigned>::iterator,
@@ -113,7 +110,6 @@ private:
 
 //===----------------------------------------------------------------------===//
 // ValueTypeRange
-//===----------------------------------------------------------------------===//
 
 /// This class implements iteration on the types of a given range of values.
 template <typename ValueIteratorT>

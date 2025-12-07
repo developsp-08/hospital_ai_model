@@ -28,9 +28,8 @@ class TransposeOp : public OpKernel {
   void Compute(OpKernelContext* ctx) override;
 
  protected:
-  virtual absl::Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
-                                   absl::Span<const int32> perm,
-                                   Tensor* out) = 0;
+  virtual Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
+                             gtl::ArraySlice<int32> perm, Tensor* out) = 0;
   virtual bool IsConjugate() const { return false; }
 };
 
@@ -39,8 +38,8 @@ class TransposeCpuOp : public TransposeOp {
   explicit TransposeCpuOp(OpKernelConstruction* ctx) : TransposeOp(ctx) {}
 
  protected:
-  absl::Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
-                           absl::Span<const int32> perm, Tensor* out) override;
+  Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
+                     gtl::ArraySlice<int32> perm, Tensor* out) override;
 };
 
 #if defined(INTEL_MKL)
@@ -59,8 +58,8 @@ class TransposeGpuOp : public TransposeOp {
   explicit TransposeGpuOp(OpKernelConstruction* ctx) : TransposeOp(ctx) {}
 
  protected:
-  absl::Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
-                           absl::Span<const int32> perm, Tensor* out) override;
+  Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
+                     gtl::ArraySlice<int32> perm, Tensor* out) override;
 };
 
 
@@ -71,8 +70,8 @@ class ConjugateTransposeCpuOp : public TransposeOp {
       : TransposeOp(ctx) {}
 
  protected:
-  absl::Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
-                           absl::Span<const int32> perm, Tensor* out) override;
+  Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
+                     gtl::ArraySlice<int32> perm, Tensor* out) override;
   bool IsConjugate() const override { return true; }
 };
 
@@ -95,8 +94,8 @@ class ConjugateTransposeGpuOp : public TransposeOp {
       : TransposeOp(ctx) {}
 
  protected:
-  absl::Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
-                           absl::Span<const int32> perm, Tensor* out) override;
+  Status DoTranspose(OpKernelContext* ctx, const Tensor& in,
+                     gtl::ArraySlice<int32> perm, Tensor* out) override;
   bool IsConjugate() const override { return true; }
 };
 

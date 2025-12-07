@@ -47,8 +47,8 @@ class PinToHostOptimizer : public GraphOptimizer {
 
   bool UsesFunctionLibrary() const override { return false; }
 
-  absl::Status Optimize(Cluster* cluster, const GrapplerItem& item,
-                        GraphDef* optimized_graph) override;
+  Status Optimize(Cluster* cluster, const GrapplerItem& item,
+                  GraphDef* optimized_graph) override;
 };
 
 }  // end namespace grappler

@@ -114,13 +114,13 @@ class NodeView : public internal::NodeViewInternal<FaninView, FanoutView,
 class GraphView : public internal::GraphViewInternal<NodeView, FaninView,
                                                      FanoutView, true> {
  public:
-  explicit GraphView(const GraphDef* graph, absl::Status* status);
+  explicit GraphView(const GraphDef* graph, Status* status);
   ~GraphView() override = default;
 
  private:
   bool AddUniqueNodeInternal(const NodeDef* node);
 
-  absl::Status CheckAndAddFaninsInternal(NodeView* node_view);
+  Status CheckAndAddFaninsInternal(NodeView* node_view);
 
   friend class NodeView;
 };
@@ -270,7 +270,7 @@ class Mutation {
   // Create a new node to be added to the graph. If the node's fanins are not
   // well formed (self loops, control dependencies between regular fanins), the
   // `status` will be set.
-  MutationNewNode AddNode(NodeDef&& node, absl::Status* status);
+  MutationNewNode AddNode(NodeDef&& node, Status* status);
 
   // Remove an existing node in the graph.
   void RemoveNode(MutableNodeView* node);
@@ -345,7 +345,7 @@ class Mutation {
   // Applies the Mutation to the graph. If the mutation is valid, the graph will
   // be modified. Otherwise an error status will be returned and the graph will
   // not be modified.
-  absl::Status Apply();
+  Status Apply();
 
  private:
   explicit Mutation(MutableGraphView* graph_view);
@@ -381,7 +381,7 @@ class MutableGraphView
     : public internal::GraphViewInternal<MutableNodeView, MutableFaninView,
                                          MutableFanoutView, false> {
  public:
-  explicit MutableGraphView(GraphDef* graph, absl::Status* status);
+  explicit MutableGraphView(GraphDef* graph, Status* status);
   ~MutableGraphView() override = default;
 
   // Returns a Mutation (builder) that can be used to modify MutableGraphView.
@@ -411,14 +411,14 @@ class MutableGraphView
   // topological like sorting will be performed when there are cycles. Otherwise
   // if a cycle is detected or if the graph cannot be sorted, an error will be
   // returned.
-  absl::Status SortTopologically(
+  Status SortTopologically(
       bool ignore_cycles,
       absl::Span<const TopologicalDependency> extra_dependencies);
 
  private:
   bool AddUniqueNodeInternal(NodeDef* node);
 
-  absl::Status CheckFaninsInternal(std::vector<std::vector<TensorId>>* fanins);
+  Status CheckFaninsInternal(std::vector<std::vector<TensorId>>* fanins);
 
   void AddFaninsInternal(std::vector<std::vector<TensorId>>* fanins);
 
@@ -440,22 +440,22 @@ class MutableGraphView
     friend class MutableGraphView;
   };
 
-  absl::Status GetNodeNamesAndPartitionUpdatedNodes(
+  Status GetNodeNamesAndPartitionUpdatedNodes(
       absl::flat_hash_map<absl::string_view, int>* node_names,
       std::vector<RenamedOrOverwrittenNode>* renamed_nodes,
       std::vector<int>* inplace_nodes,
       std::vector<int>* empty_diff_node_indices);
 
-  absl::Status RemovedOrMissingNodeFanoutsWellFormed(
+  Status RemovedOrMissingNodeFanoutsWellFormed(
       const absl::flat_hash_map<absl::string_view, int>& node_names,
       const std::vector<RenamedOrOverwrittenNode>& renamed_nodes);
 
-  absl::Status CheckNodeNamesAndFanins(
+  Status CheckNodeNamesAndFanins(
       const absl::flat_hash_map<absl::string_view, int>& node_names,
       const std::vector<RenamedOrOverwrittenNode>& renamed_nodes,
       const std::vector<int>& inplace_nodes);
 
-  absl::Status CheckKernelRegisteredForNodes();
+  Status CheckKernelRegisteredForNodes();
 
   // Helper class to move fanouts around.
   class NodeViewFanouts {
@@ -520,13 +520,13 @@ class MutableGraphView
       const std::vector<RenamedOrOverwrittenNode>& renamed_nodes,
       const std::vector<bool>& overwritten_name_removed_nodes);
 
-  inline absl::Status ValidateInternal(
+  inline Status ValidateInternal(
       absl::flat_hash_map<absl::string_view, int>* node_names,
       std::vector<RenamedOrOverwrittenNode>* renamed_nodes,
       std::vector<int>* inplace_nodes,
       std::vector<int>* empty_diff_node_indices);
 
-  absl::Status ApplyMutationInternal();
+  Status ApplyMutationInternal();
 
   Mutation mutation_;
 

@@ -15,7 +15,6 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_SUMMARY_SCHEMA_H_
 #define TENSORFLOW_CORE_SUMMARY_SCHEMA_H_
 
-#include "absl/status/status.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/db/sqlite.h"
 
@@ -27,7 +26,7 @@ constexpr uint32 kTensorboardSqliteApplicationId = 0xfeedabee;
 ///
 /// If they are already created, this has no effect. If schema
 /// migrations are necessary, they will be performed with logging.
-absl::Status SetupTensorboardSqliteDb(Sqlite* db);
+Status SetupTensorboardSqliteDb(Sqlite* db);
 
 }  // namespace tensorflow
 

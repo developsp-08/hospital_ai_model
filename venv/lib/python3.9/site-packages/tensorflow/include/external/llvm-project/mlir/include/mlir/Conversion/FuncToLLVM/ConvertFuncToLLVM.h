@@ -15,6 +15,7 @@
 #define MLIR_CONVERSION_FUNCTOLLVM_CONVERTFUNCTOLLVM_H
 
 #include "mlir/Interfaces/FunctionInterfaces.h"
+#include "mlir/Support/LogicalResult.h"
 
 namespace mlir {
 
@@ -27,23 +28,20 @@ class DialectRegistry;
 class LLVMTypeConverter;
 class RewritePatternSet;
 class SymbolTable;
-class SymbolTableCollection;
 
 /// Convert input FunctionOpInterface operation to LLVMFuncOp by using the
 /// provided LLVMTypeConverter. Return failure if failed to so.
 FailureOr<LLVM::LLVMFuncOp>
 convertFuncOpToLLVMFuncOp(FunctionOpInterface funcOp,
                           ConversionPatternRewriter &rewriter,
-                          const LLVMTypeConverter &converter,
-                          SymbolTableCollection *symbolTables = nullptr);
+                          const LLVMTypeConverter &converter);
 
 /// Collect the default pattern to convert a FuncOp to the LLVM dialect. If
 /// `emitCWrappers` is set, the pattern will also produce functions
 /// that pass memref descriptors by pointer-to-structure in addition to the
 /// default unpacked form.
-void populateFuncToLLVMFuncOpConversionPattern(
-    const LLVMTypeConverter &converter, RewritePatternSet &patterns,
-    SymbolTableCollection *symbolTables = nullptr);
+void populateFuncToLLVMFuncOpConversionPattern(LLVMTypeConverter &converter,
+                                               RewritePatternSet &patterns);
 
 /// Collect the patterns to convert from the Func dialect to LLVM. The
 /// conversion patterns capture the LLVMTypeConverter and the LowerToLLVMOptions
@@ -59,8 +57,8 @@ void populateFuncToLLVMFuncOpConversionPattern(
 /// needed if `converter.getOptions().useBarePtrCallConv` is `true`, but it's
 /// not an error to provide it anyway.
 void populateFuncToLLVMConversionPatterns(
-    const LLVMTypeConverter &converter, RewritePatternSet &patterns,
-    SymbolTableCollection *symbolTables = nullptr);
+    LLVMTypeConverter &converter, RewritePatternSet &patterns,
+    const SymbolTable *symbolTable = nullptr);
 
 void registerConvertFuncToLLVMInterface(DialectRegistry &registry);
 

@@ -20,7 +20,6 @@ limitations under the License.
 
 #include "tensorflow/c/c_api.h"
 #include "tensorflow/c/c_api_macros.h"
-#include "tensorflow/c/tf_buffer.h"
 #include "tensorflow/c/tf_status.h"
 
 // --------------------------------------------------------------------------

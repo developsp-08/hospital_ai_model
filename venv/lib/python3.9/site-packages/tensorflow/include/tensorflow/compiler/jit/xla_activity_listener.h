@@ -22,21 +22,18 @@ limitations under the License.
 
 namespace tensorflow {
 // Broadcast `auto_clustering_activity` to all the registered listeners.
-absl::Status BroadcastXlaActivity(
-    XlaAutoClusteringActivity auto_clustering_activity);
+Status BroadcastXlaActivity(XlaAutoClusteringActivity auto_clustering_activity);
 
 // Broadcast `jit_compilation_activity` to all the registered listeners.
-absl::Status BroadcastXlaActivity(
-    XlaJitCompilationActivity jit_compilation_activity);
+Status BroadcastXlaActivity(XlaJitCompilationActivity jit_compilation_activity);
 
 // Broadcast `jit_compilation_activity` to all the registered listeners.
-absl::Status BroadcastOptimizationRemark(
-    XlaOptimizationRemark optimization_remark);
+Status BroadcastOptimizationRemark(XlaOptimizationRemark optimization_remark);
 
 // LINT.IfChange
 // Called after TensorFlow realizes possible lost performance. The parameters in
 // this should match all of the values in the XlaOptimizationRemark proto.
-absl::Status BroadcastOptimizationRemark(
+Status BroadcastOptimizationRemark(
     XlaOptimizationRemark::Warning optimization_warning,
     string debug_information);
 
@@ -49,16 +46,15 @@ absl::Status BroadcastOptimizationRemark(
 class XlaActivityListener {
  public:
   // Called after TensorFlow auto-clusters a graph.
-  virtual absl::Status Listen(
+  virtual Status Listen(
       const XlaAutoClusteringActivity& auto_clustering_activity) = 0;
 
   // Called after TensorFlow JIT compiles an XLA cluster.
-  virtual absl::Status Listen(
+  virtual Status Listen(
       const XlaJitCompilationActivity& jit_compilation_activity) = 0;
 
   // Called after TensorFlow realizes possible lost performance.
-  virtual absl::Status Listen(
-      const XlaOptimizationRemark& optimization_remark) = 0;
+  virtual Status Listen(const XlaOptimizationRemark& optimization_remark) = 0;
 
   // Called at program exit in best-effort manner to give listeners a chance to
   // flush their state.
