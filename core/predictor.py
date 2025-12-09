@@ -22,9 +22,8 @@ SCALER_X_PATH = 'models/scaler_x.pkl'
 SCALER_Y_PATH = 'models/scaler_y.pkl'
 METADATA_PATH = 'models/model_metadata.pkl'
 
-# 🆕 Path สำหรับไฟล์ Excel อ้างอิงที่ใช้ในการ Initial Load
-REFERENCE_EXCEL_PATH = 'data/Training_Data_Final.xlsx' 
-# ❗ ต้องมั่นใจว่าไฟล์นี้มีอยู่จริงบน Server
+# Path สำหรับไฟล์ Excel อ้างอิงที่ใช้ในการ Initial Load
+REFERENCE_EXCEL_PATH = 'data/Training_Data_Final.xlsx'  
 
 def load_model_system() -> Dict[str, Any]:
     """Load artifacts if present. Caller should handle exceptions."""
@@ -70,7 +69,6 @@ def load_model_system() -> Dict[str, Any]:
 
     return artifacts
 
-# 🆕 ฟังก์ชันใหม่: ดึงข้อมูลอ้างอิงจากไฟล์ Excel บน Server
 def get_reference_data() -> bytes:
     """Read the byte content of the reference Excel file."""
     if not os.path.exists(REFERENCE_EXCEL_PATH):
@@ -87,11 +85,9 @@ def _stable_seed_from_sku(sku: Any, offset: int = 0) -> int:
     return (num + offset) % (2**32)
 
 
-def prepare_lstm_input(df_latest: pd.DataFrame, sku: Any, metadata: Dict[str, Any], scaler_x, scaler_y, lt_category_pred):
+def prepare_lstm_input(df_latest: pd.DataFrame, sku: Any, metadata: Dict[str, Any], scaler_x, scaler_y, lt_category_pred, forecast_days: int): # 💡 เพิ่ม forecast_days
     """
-    Build LSTM input sequence from snapshot row.
-    NOTE: Best to provide historical monthly usage columns in df_latest. If not available,
-    function repeats latest Usage_Qty as fallback (not ideal but safe).
+    Build LSTM input sequence from snapshot row, including the current forecast_days setting.
     """
     time_steps = int(metadata.get('time_steps', 12))
     features = list(metadata.get('valid_features_lstm', []))
@@ -114,6 +110,8 @@ def prepare_lstm_input(df_latest: pd.DataFrame, sku: Any, metadata: Dict[str, An
                 month_record[f] = row.get('Total_SKU_Usage', 0)
             elif f == 'Patient_Count':
                 month_record[f] = row.get('Patient_Count', 1500)
+            elif f == 'forecast_days': # 💡 เพิ่มเงื่อนไขสำหรับฟีเจอร์ใหม่
+                month_record[f] = forecast_days
             elif f in ['Patient_E', 'Patient_I', 'Patient_O']:
                 month_record[f] = row.get(f, 0)
             elif f in ['month_num', 'year_num', 'day_index']:
@@ -266,11 +264,12 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
 
 
         # ---------- Forecasting ----------
-        predicted_usage_monthly = None 
+        predicted_usage_monthly = None  
         # Prefer LSTM if available and scalers are provided (best-effort)
         if lstm_model is not None and scaler_x is not None and scaler_y is not None:
             try:
-                input_seq = prepare_lstm_input(df_latest, sku, metadata, scaler_x, scaler_y, lt_cat)
+                # 💡 ส่ง forecast_days เข้าไปเป็น Input Feature ให้ prepare_lstm_input
+                input_seq = prepare_lstm_input(df_latest, sku, metadata, scaler_x, scaler_y, lt_cat, forecast_days)
                 scaled_pred = lstm_model.predict(input_seq, verbose=0)
                 if np.ndim(scaled_pred) == 2 and scaled_pred.shape[1] >= 1:
                     actual_pred = scaler_y.inverse_transform(scaled_pred)[0][0] if scaler_y is not None else scaled_pred[0][0]
@@ -286,8 +285,23 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
         if predicted_usage_monthly == 0:
             predicted_usage_monthly = float(row.get('Usage_Qty', 0) or 0)
 
-        # Average daily usage (used only as base rate for daily noise and ROP)
+        # Average daily usage based on LSTM output
         base_daily_usage_rate = predicted_usage_monthly / 30.0 if predicted_usage_monthly > 0 else 0.0
+
+        # --- Dynamic Rate Logic (Soft Adjustment based on LT Risk) ---
+        # ⚠️ ลบโค้ด "ทางเลือก B" ออก แล้วใช้ base_daily_usage_rate จาก LSTM ที่ได้เรียนรู้ forecast_days แล้วแทน
+        
+        # เรายังคงใช้ Volatility Factor เพื่อเพิ่มความเสี่ยงตาม LT Risk ในการคำนวณ Daily Rate
+        lt_cat = row.get('LT_CATEGORY_PRED', 0)
+        if lt_cat == 2:
+            volatility_factor = 1.10 # เพิ่ม 10% สำหรับความผันผวนของ Slow LT
+        elif lt_cat == 1:
+            volatility_factor = 1.05 # เพิ่ม 5% สำหรับความผันผวนปกติ
+        else: 
+            volatility_factor = 1.00
+
+        adjusted_daily_rate = base_daily_usage_rate * volatility_factor
+        # ----------------------------------------------------------------------------------
 
         # Storage for calculating total demand over forecast period
         predicted_demand_sum = 0.0
@@ -297,7 +311,8 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
             seed = _stable_seed_from_sku(sku, i)
             np.random.seed(seed)
             random_factor = np.random.uniform(0.95, 1.05)
-            predicted_daily_usage_float = base_daily_usage_rate * random_factor
+            # ใช้ adjusted_daily_rate (ซึ่งมาจาก LSTM ที่รับ forecast_days เป็น input)
+            predicted_daily_usage_float = adjusted_daily_rate * random_factor
             predicted_daily_usage = max(0.0, float(predicted_daily_usage_float))
             
             # 🔥 Calculation for dynamic metric: Summing up demand over the entire forecast period
@@ -323,6 +338,7 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
         rop_threshold = (base_daily_usage_rate * LT_Days) + Min_Stock
         
         # 2. Dynamic Coverage Threshold (Based on Forecast Days)
+        # predicted_demand_sum จะปรับตาม forecast_days ผ่านการทำนายของ LSTM
         needed_for_forecast = predicted_demand_sum + Min_Stock
 
         stock_out_date = None
@@ -373,7 +389,8 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
             'reorder_cost': round(reorder_cost, 2), # DYNAMIC
             'current_soh': int(round(SOH)),
             'rop_threshold': int(round(rop_threshold)),
-            'max_stock_policy': int(Max_Stock)
+            'max_stock_policy': int(Max_Stock),
+            'lead_time_days' : LT_Days
         })
 
     # Sum reorder_cost across all items (DYNAMIC)
