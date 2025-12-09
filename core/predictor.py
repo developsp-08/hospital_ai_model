@@ -22,6 +22,9 @@ SCALER_X_PATH = 'models/scaler_x.pkl'
 SCALER_Y_PATH = 'models/scaler_y.pkl'
 METADATA_PATH = 'models/model_metadata.pkl'
 
+# 🆕 Path สำหรับไฟล์ Excel อ้างอิงที่ใช้ในการ Initial Load
+REFERENCE_EXCEL_PATH = 'data/Training_Data_Final.xlsx' 
+# ❗ ต้องมั่นใจว่าไฟล์นี้มีอยู่จริงบน Server
 
 def load_model_system() -> Dict[str, Any]:
     """Load artifacts if present. Caller should handle exceptions."""
@@ -67,6 +70,14 @@ def load_model_system() -> Dict[str, Any]:
 
     return artifacts
 
+# 🆕 ฟังก์ชันใหม่: ดึงข้อมูลอ้างอิงจากไฟล์ Excel บน Server
+def get_reference_data() -> bytes:
+    """Read the byte content of the reference Excel file."""
+    if not os.path.exists(REFERENCE_EXCEL_PATH):
+        raise FileNotFoundError(f"Reference Excel file not found at: {REFERENCE_EXCEL_PATH}")
+    
+    with open(REFERENCE_EXCEL_PATH, 'rb') as f:
+        return f.read()
 
 def _stable_seed_from_sku(sku: Any, offset: int = 0) -> int:
     """Deterministic seed from SKU + offset using MD5 (stable across runs)."""
@@ -133,7 +144,7 @@ def prepare_lstm_input(df_latest: pd.DataFrame, sku: Any, metadata: Dict[str, An
     else:
         y_scaled = y_vals
 
-    combined = np.hstack([x_scaled, y_scaled]) if x_scaled.size and y_vals.size else np.hstack([x_scaled, y_vals])
+    combined = np.hstack([x_scaled, y_vals]) if x_scaled.size and y_vals.size else np.hstack([x_scaled, y_vals])
     return np.array([combined])
 
 
@@ -309,20 +320,16 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
 
         
         # 1. ROP Threshold (Static part based on Lead Time)
-        # Reorder Point (ROP) = (Avg Daily Demand * Lead Time) + Safety Stock
         rop_threshold = (base_daily_usage_rate * LT_Days) + Min_Stock
         
         # 2. Dynamic Coverage Threshold (Based on Forecast Days)
-        # Needed stock to cover the entire forecast period plus safety stock
         needed_for_forecast = predicted_demand_sum + Min_Stock
 
         stock_out_date = None
         reorder_qty_float = 0.0
 
         # 🔥 Determine priority based on ROP and Forecast Coverage (DYNAMIC)
-        is_high_risk = (SOH < rop_threshold) # High Risk: Stock will run out before new stock arrives (based on LT)
-        
-        # Medium risk: Stock is safe for LT, but NOT safe for the ENTIRE forecast period requested by the user
+        is_high_risk = (SOH < rop_threshold) 
         is_medium_risk = (not is_high_risk) and (SOH < needed_for_forecast) 
         
         if is_high_risk:
@@ -338,8 +345,6 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
             
             if Max_Stock > 0:
                 # 🛑 Policy 1 (Max Stock): Target is the MINIMUM of Max_Stock or the Dynamic Coverage needed.
-                # If forecast_days is short, it orders less (dynamic). If forecast_days is long, 
-                # it caps at Max_Stock (static cap).
                 final_target_stock = min(Max_Stock, needed_for_forecast)
                 reorder_qty_float = max(0.0, final_target_stock - SOH)
                 
@@ -377,7 +382,6 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
     return {
         "forecast": forecast_result_rows,
         "metrics": {
-            # Total SKUs remains static as it represents the input dataset size.
             'total_skus': int(len(df_latest)), 
             'high_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'High Priority'], # DYNAMIC
             'medium_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'Medium Priority'], # DYNAMIC
