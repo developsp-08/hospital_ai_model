@@ -166,6 +166,9 @@ def recursive_predict_monthly(
     use_real_history=False
 ):
 
+    import numpy as np
+    import pandas as pd
+
     time_steps = int(metadata.get("time_steps", 12))
     features = metadata.get("valid_features_lstm", [])
 
@@ -178,6 +181,7 @@ def recursive_predict_monthly(
         .copy()
     )
 
+    sku_hist["Date"] = pd.to_datetime(sku_hist["Date"])
     usage = sku_hist["Usage_Qty"].astype(float)
 
     h_mean = usage.mean()
@@ -186,7 +190,6 @@ def recursive_predict_monthly(
     h_p90 = usage.quantile(0.90)
 
     zero_ratio = (usage == 0).mean()
-
     semi_intermittent = (h_median < 15) and (zero_ratio > 0.2)
 
     # -------------------------------
@@ -204,7 +207,7 @@ def recursive_predict_monthly(
     )
 
     # -------------------------------
-    # 3. SEED
+    # 3. SEED HISTORY
     # -------------------------------
     history = (
         usage.head(time_steps).tolist()
@@ -221,27 +224,24 @@ def recursive_predict_monthly(
     preds = []
 
     # -------------------------------
-    # 4. FORECAST
+    # 4. FORECAST LOOP
     # -------------------------------
     for step in range(1, predict_months + 1):
 
         target_month = (start_date + pd.DateOffset(months=step)).month
-
         month_cap = seasonal_p90.get(target_month, h_p75)
 
         if semi_intermittent:
             usage_cap = max(h_p75 * 1.1, h_median * 1.3)
-            alpha = 0.45
         else:
             usage_cap = max(h_p90 * 1.15, h_mean * 1.2)
-            alpha = min(0.7, 0.55 + step * 0.03)
 
         seq = []
         for i in range(time_steps):
             rec = {f: sku_row.get(f, 0) for f in features}
             rec["Usage_Qty"] = history[-time_steps + i]
 
-            # ❌ ignore patient for chart
+            # ignore patient for chart
             for p in ["Patient_E", "Patient_I", "Patient_O"]:
                 if p in rec:
                     rec[p] = 0.0
@@ -262,33 +262,35 @@ def recursive_predict_monthly(
         pred = scaler_y.inverse_transform(raw)[0][0]
 
         # -------------------------------
-        # 5. STABILIZATION (FIX FLAT LINE)
+        # 5. STABILIZATION
         # -------------------------------
-
-        # ใช้ median เป็น anchor
         anchor = h_median if h_median > 0 else h_mean
-
-        # alpha ลดลงเมื่อเริ่มนิ่ง
         alpha = 0.55 if semi_intermittent else min(0.65, 0.55 + step * 0.02)
 
         stabilized = (pred * alpha) + (anchor * (1 - alpha))
 
-        # ---- SOFT CAP (สำคัญมาก) ----
+        # SOFT CAP
         if stabilized > usage_cap:
             stabilized = usage_cap * 0.95 + np.random.uniform(-1.0, 1.0)
 
-        # ---- FLOOR ----
+        # FLOOR
         stabilized = max(0.0, stabilized)
 
-        # ---- BREAK CONSTANT LOOP ----
+        # BREAK CONSTANT LOOP
         if len(preds) >= 2:
             if abs(preds[-1] - stabilized) < 0.5:
                 stabilized *= np.random.uniform(0.96, 1.04)
 
-        preds.append(float(stabilized))
-        history.append(stabilized)
+        # -------------------------------
+        # 6. CONVERT TO INTEGER (FINAL)
+        # -------------------------------
+        stabilized_int = int(round(stabilized))
+
+        preds.append(stabilized_int)
+        history.append(stabilized_int)
 
     return preds
+
 
 
 
