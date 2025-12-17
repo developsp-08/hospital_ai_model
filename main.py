@@ -1,7 +1,5 @@
-# main.py (FINAL VERSION - WITH INITIAL LOAD)
-
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Query # 🆕 Import Query
-from core.predictor import load_model_system, predict_inventory_usage, get_reference_data # 🆕 Import get_reference_data
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Query 
+from core.predictor import load_model_system, predict_inventory_usage, get_reference_data 
 from starlette.middleware.cors import CORSMiddleware
 import logging
 from typing import Dict, Any
@@ -53,7 +51,7 @@ async def predict_inventory_from_file(
         return {
             "Total_SKUs_Trained": results['metrics']['total_skus'],
             "Total_Reorder_Cost": results['metrics']['reorder_cost_total'],
-            "Forecast_Data": results['forecast'],
+            "Monthly_Time_Series_Data": results['Monthly_Chart_Data'], 
             "Priority_Metrics": {
                 "High_Priority_Items": results['metrics']['high_priority_items'],
                 "Medium_Priority_Items": results['metrics']['medium_priority_items'],
@@ -84,7 +82,8 @@ async def initial_forecast(
         return {
             "Total_SKUs_Trained": results['metrics']['total_skus'],
             "Total_Reorder_Cost": results['metrics']['reorder_cost_total'],
-            "Forecast_Data": results['forecast'],
+            # 🆕 ใช้คีย์ใหม่ที่รวมข้อมูล Actual (12M) และ Predicted (4M) รายเดือนเข้าด้วยกัน
+            "Monthly_Time_Series_Data": results['Monthly_Chart_Data'], 
             "Priority_Metrics": {
                 "High_Priority_Items": results['metrics']['high_priority_items'],
                 "Medium_Priority_Items": results['metrics']['medium_priority_items'],
