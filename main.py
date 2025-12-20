@@ -1,41 +1,30 @@
-# main.py (FINAL VERSION)
-
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
-from core.predictor import load_model_metadata, predict_inventory_usage
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Query 
+from core.predictor import load_model_system, predict_inventory_usage, get_reference_data 
 from starlette.middleware.cors import CORSMiddleware
 import logging
 from typing import Dict, Any
 
-# --- Setup ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Dependency: Load Model Metadata ---
+# ใช้ global variable เพื่อเก็บ model/metadata
+INVENTORY_SYSTEM: Dict[str, Any] = {}
+
 def get_model_metadata() -> Dict[str, Any]:
-    global INVENTORY_MODEL_METADATA
-    if 'INVENTORY_MODEL_METADATA' not in globals():
+    global INVENTORY_SYSTEM
+    # ใช้ len(INVENTORY_SYSTEM) แทนการเช็คด้วย globals()
+    if not INVENTORY_SYSTEM: 
         try:
-            INVENTORY_MODEL_METADATA = load_model_metadata()
-            logger.info("Model loaded successfully.")
+            INVENTORY_SYSTEM = load_model_system()
+            logger.info("Hybrid AI System loaded.")
         except FileNotFoundError as e:
-            logger.error(f"Error loading model: {e}")
-            INVENTORY_MODEL_METADATA = None
-    return INVENTORY_MODEL_METADATA
+            logger.error(f"Error: {e}")
+            INVENTORY_SYSTEM = {} # ตั้งเป็น dict เปล่า
+    return INVENTORY_SYSTEM
 
-# --- Initialize FastAPI ---
-app = FastAPI(
-    title="Hospital Inventory Predictor API (XGBoost)",
-    version="1.0.0"
-)
+app = FastAPI(title="Hybrid Inventory AI", version="5.0")
 
-# --- CORS Configuration ---
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
+origins = ["http://localhost:3000", "http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -44,47 +33,66 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- API Endpoints ---
-
-@app.get("/")
-def read_root():
-    return {"message": "XGBoost Inventory Predictor API is running."}
-
+# 🛑 ENDPOINT เดิม (สำหรับ Upload Excel)
 @app.post("/predict")
 async def predict_inventory_from_file(
-    file: UploadFile = File(..., description="ไฟล์ Excel ที่มีข้อมูลการใช้งานล่าสุด (Snapshot)"),
-    forecast_days: int = Form(3, description="จำนวนเดือนที่ต้องการทำนายล่วงหน้า"),
+    file: UploadFile = File(...),
+    forecast_days: int = Form(7), 
     metadata: Dict[str, Any] = Depends(get_model_metadata)
 ):
-    """
-    รับไฟล์ Excel ล่าสุดเพื่อทำนายยอด Usage, จัดลำดับความสำคัญ, และคำนวณต้นทุน
-    """
-    if metadata is None:
-        raise HTTPException(status_code=503, detail="Model service unavailable. Please run train_and_save_model.ipynb first.")
+    if not metadata:
+        raise HTTPException(status_code=503, detail="AI Model not ready.")
     
-    # 1. อ่านไฟล์ที่อัปโหลดเป็น bytes
     file_content = await file.read()
-    
-    # 2. ทำนายและคำนวณ Actions
     try:
-        results = predict_inventory_usage(
-            metadata=metadata, 
-            file_content=file_content,
-            forecast_days=forecast_days
-        )
+        results = predict_inventory_usage(metadata, file_content, forecast_days)
         
-        # 3. จัดโครงสร้าง Output สำหรับ Dashboard
+        # Format for Dashboard
         return {
             "Total_SKUs_Trained": results['metrics']['total_skus'],
             "Total_Reorder_Cost": results['metrics']['reorder_cost_total'],
-            "Forecast_Data": results['forecast'],
+            "Monthly_Time_Series_Data": results['Monthly_Chart_Data'], 
             "Priority_Metrics": {
                 "High_Priority_Items": results['metrics']['high_priority_items'],
                 "Medium_Priority_Items": results['metrics']['medium_priority_items'],
                 "Action_Items_Summary": results['metrics']['action_items']
             }
         }
-    
     except Exception as e:
         logger.error(f"Prediction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {e}")
+
+# 🆕 ENDPOINT ใหม่ (สำหรับ Initial Load)
+@app.get("/initial_forecast")
+async def initial_forecast(
+    forecast_days: int = Query(7, ge=1), # 7 วันเป็นค่า default
+    metadata: Dict[str, Any] = Depends(get_model_metadata)
+):
+    if not metadata:
+        raise HTTPException(status_code=503, detail="AI Model not ready.")
+        
+    try:
+        # 1. ดึงไฟล์ Excel อ้างอิงจาก Server
+        file_content = get_reference_data() 
+        
+        # 2. รัน prediction logic
+        results = predict_inventory_usage(metadata, file_content, forecast_days)
+
+        # 3. Format และคืนค่าผลลัพธ์ (ใช้โครงสร้างเดียวกับ /predict)
+        return {
+            "Total_SKUs_Trained": results['metrics']['total_skus'],
+            "Total_Reorder_Cost": results['metrics']['reorder_cost_total'],
+            # 🆕 ใช้คีย์ใหม่ที่รวมข้อมูล Actual (12M) และ Predicted (4M) รายเดือนเข้าด้วยกัน
+            "Monthly_Time_Series_Data": results['Monthly_Chart_Data'], 
+            "Priority_Metrics": {
+                "High_Priority_Items": results['metrics']['high_priority_items'],
+                "Medium_Priority_Items": results['metrics']['medium_priority_items'],
+                "Action_Items_Summary": results['metrics']['action_items']
+            }
+        }
+    except FileNotFoundError as e:
+        logger.error(f"Initial Load Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Server Error: Reference Excel file not found. Please ensure {REFERENCE_EXCEL_PATH} exists.")
+    except Exception as e:
+        logger.error(f"Prediction failed during initial load: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {e}")
