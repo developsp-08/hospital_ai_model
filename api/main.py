@@ -108,3 +108,4 @@ async def initial_forecast(
     except Exception as e:
         logger.error(f"Prediction failed during initial load: {e}")
         raise HTTPException(status_code=500, detail=f"Error: {e}")
+    # version 1
