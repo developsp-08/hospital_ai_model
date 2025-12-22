@@ -9,27 +9,42 @@ from typing import Dict, Any, List
 import math
 import hashlib
 import re
+import boto3
 import pandas.core.common as pdc # Import for robust date offset handling
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # optional: tensorflow import only if model exists in runtime
 try:
     from tensorflow.keras.models import load_model
 except Exception:
     load_model = None  # safe fallback for environments without TF
+    
+    
+# --- 🆕 S3 Helper Configuration ---
+S3_BUCKET = os.environ.get('S3_BUCKET_NAME')
+S3_REGION = os.environ.get('AWS_REGION', 'ap-southeast-1')
 
-# Paths (update as needed)
-MODEL_LSTM_PATH = 'models/inventory_lstm_model.h5'
-MODEL_XGB_CLASS_PATH = 'models/lead_time_classifier.pkl'
-SCALER_X_PATH = 'models/scaler_x.pkl'
-SCALER_Y_PATH = 'models/scaler_y.pkl'
-METADATA_PATH = 'models/model_metadata.pkl'
+s3_client = boto3.client(
+    's3',
+    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+    region_name=S3_REGION
+)
+
+def load_s3_bytes(file_key: str) -> BytesIO:
+    """ดึงไฟล์จาก S3 และส่งคืนเป็น BytesIO"""
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=file_key)
+        return BytesIO(obj['Body'].read())
+    except Exception as e:
+        print(f"Error loading {file_key} from S3: {e}")
+        return None
 
 # 🆕 กำหนดกรอบเวลาตายตัวสำหรับกราฟ
 ACTUAL_MONTHS = 12 
 PREDICT_MONTHS = 4
-
-# 🆕 Path สำหรับไฟล์ Excel อ้างอิงที่ใช้ในการ Initial Load
-REFERENCE_EXCEL_PATH = 'data/Training_Data_Final.xlsx' 
 
 def load_model_system() -> Dict[str, Any]:
     """Load artifacts if present. Caller should handle exceptions."""
@@ -41,48 +56,54 @@ def load_model_system() -> Dict[str, Any]:
         'metadata': {}
     }
 
-    # load LSTM model if available and tensorflow present
+    # 1. load LSTM model (Keras จำเป็นต้องโหลดจากไฟล์จริงในดิสก์)
     try:
-        if load_model and os.path.exists(MODEL_LSTM_PATH):
-            artifacts['lstm_model'] = load_model(MODEL_LSTM_PATH)
-    except Exception:
-        artifacts['lstm_model'] = None
+        if load_model:
+            model_bytes = load_s3_bytes('inventory_lstm_model.h5')
+            if model_bytes:
+                # บันทึกลง /tmp ของ Vercel ชั่วคราว
+                temp_path = "/tmp/temp_lstm_model.h5"
+                with open(temp_path, "wb") as f:
+                    f.write(model_bytes.getbuffer())
+                artifacts['lstm_model'] = load_model(temp_path)
+    except Exception as e:
+        print(f"LSTM Load Error: {e}")
 
-    # load pickled artifacts if exist
+    # 2. load pickled artifacts (โหลดตรงจาก Memory ได้เลย)
     try:
-        if os.path.exists(MODEL_XGB_CLASS_PATH):
-            artifacts['xgb_classifier'] = joblib.load(MODEL_XGB_CLASS_PATH)
-    except Exception:
-        artifacts['xgb_classifier'] = None
-
-    try:
-        if os.path.exists(SCALER_X_PATH):
-            artifacts['scaler_x'] = joblib.load(SCALER_X_PATH)
-    except Exception:
-        artifacts['scaler_x'] = None
-
-    try:
-        if os.path.exists(SCALER_Y_PATH):
-            artifacts['scaler_y'] = joblib.load(SCALER_Y_PATH)
-    except Exception:
-        artifacts['scaler_y'] = None
-
-    try:
-        if os.path.exists(METADATA_PATH):
-            artifacts['metadata'] = joblib.load(METADATA_PATH)
-    except Exception:
-        artifacts['metadata'] = {}
+        xgb_bytes = load_s3_bytes('lead_time_classifier.pkl')
+        if xgb_bytes: artifacts['xgb_classifier'] = joblib.load(xgb_bytes)
+        
+        sx_bytes = load_s3_bytes('scaler_x.pkl')
+        if sx_bytes: artifacts['scaler_x'] = joblib.load(sx_bytes)
+        
+        sy_bytes = load_s3_bytes('scaler_y.pkl')
+        if sy_bytes: artifacts['scaler_y'] = joblib.load(sy_bytes)
+        
+        meta_bytes = load_s3_bytes('model_metadata.pkl')
+        if meta_bytes: artifacts['metadata'] = joblib.load(meta_bytes)
+        
+        print("✅ All artifacts loaded successfully from S3")
+    except Exception as e:
+        print(f"Pickle Load Error: {e}")
 
     return artifacts
 
 # 🆕 ฟังก์ชันใหม่: ดึงข้อมูลอ้างอิงจากไฟล์ Excel บน Server
-def get_reference_data() -> bytes:
-    """Read the byte content of the reference Excel file."""
-    if not os.path.exists(REFERENCE_EXCEL_PATH):
-        raise FileNotFoundError(f"Reference Excel file not found at: {REFERENCE_EXCEL_PATH}")
+# def get_reference_data() -> bytes:
+#     """Read the byte content of the reference Excel file."""
+#     if not os.path.exists(REFERENCE_EXCEL_PATH):
+#         raise FileNotFoundError(f"Reference Excel file not found at: {REFERENCE_EXCEL_PATH}")
     
-    with open(REFERENCE_EXCEL_PATH, 'rb') as f:
-        return f.read()
+#     with open(REFERENCE_EXCEL_PATH, 'rb') as f:
+#         return f.read()
+
+def get_reference_data() -> bytes:
+    """ปรับปรุง: อ่าน Excel จาก S3"""
+    excel_bytes = load_s3_bytes('Training_Data_Final.xlsx')
+    if not excel_bytes:
+        raise FileNotFoundError("Reference Excel file not found on S3.")
+    return excel_bytes.getvalue()
 
 def _stable_seed_from_sku(sku: Any, offset: int = 0) -> int:
     """Deterministic seed from SKU + offset using MD5 (stable across runs)."""
@@ -301,14 +322,16 @@ def get_monthly_chart_data(sku_list, sku_to_item_name_map, metadata, lstm_model,
     all_chart_data = []
     time_steps = int(metadata.get('time_steps', 12))
     
-    if not os.path.exists(REFERENCE_EXCEL_PATH): return []
+    
+    # ปรับปรุง: ดึงไฟล์ประวัติจาก S3
+    excel_bytes = load_s3_bytes('Training_Data_Final.xlsx')
+    if not excel_bytes: return []
 
-    df_history = pd.read_csv(REFERENCE_EXCEL_PATH) if REFERENCE_EXCEL_PATH.endswith('.csv') else pd.read_excel(REFERENCE_EXCEL_PATH)
+    df_history = pd.read_excel(excel_bytes)
     df_history.columns = df_history.columns.str.strip()
     df_history['Date'] = pd.to_datetime(df_history['Date'])
     df_history['SKU'] = df_history['SKU'].astype(str).str.strip()
     df_history['Month_Year'] = df_history['Date'].dt.to_period('M').dt.to_timestamp()
-    
     df_monthly_agg = df_history.groupby(['Month_Year', 'SKU']).agg({'Usage_Qty': 'sum'}).reset_index()
 
     for sku in sku_list:

@@ -3,6 +3,7 @@ from core.predictor import load_model_system, predict_inventory_usage, get_refer
 from starlette.middleware.cors import CORSMiddleware
 import logging
 from typing import Dict, Any
+import entrypoint
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,6 +33,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup_event():
+    entrypoint.prepare_environment()
 
 # 🛑 ENDPOINT เดิม (สำหรับ Upload Excel)
 @app.post("/predict")
@@ -92,7 +97,7 @@ async def initial_forecast(
         }
     except FileNotFoundError as e:
         logger.error(f"Initial Load Error: {e}")
-        raise HTTPException(status_code=500, detail=f"Server Error: Reference Excel file not found. Please ensure {REFERENCE_EXCEL_PATH} exists.")
+        raise HTTPException(status_code=500, detail=f"Server Error: Reference Excel file not found. Please ensure exists.")
     except Exception as e:
         logger.error(f"Prediction failed during initial load: {e}")
         raise HTTPException(status_code=500, detail=f"Error: {e}")

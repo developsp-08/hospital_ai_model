@@ -4,3 +4,8 @@ venv/
 **/venv/
 __pycache__/
 *.pyc
+.env
+
+models/*.h5
+models/*.pkl
+data/*.xlsx
