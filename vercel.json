@@ -7,7 +7,7 @@
   ],
   "functions": {
     "api/main.py": {
-      "runtime": "python3.9",
+      "runtime": "@vercel/python",
       "maxDuration": 30
     }
   }
