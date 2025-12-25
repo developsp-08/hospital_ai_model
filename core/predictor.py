@@ -15,11 +15,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# optional: tensorflow import only if model exists in runtime
-try:
-    from tensorflow.keras.models import load_model
-except Exception:
-    load_model = None  # safe fallback for environments without TF
+import tensorflow as tf
+load_model = tf.keras.models.load_model  
     
     
 # --- 🆕 S3 Helper Configuration ---
