@@ -218,6 +218,9 @@ def recursive_predict_monthly(
         .copy()
     )
 
+    if len(sku_hist) < 12:
+        return [0] * predict_months
+
     sku_hist["Date"] = pd.to_datetime(sku_hist["Date"])
     usage = sku_hist["Usage_Qty"].astype(float)
 
@@ -229,8 +232,17 @@ def recursive_predict_monthly(
     zero_ratio = (usage == 0).mean()
     semi_intermittent = (h_median < 15) and (zero_ratio > 0.2)
 
+    # -------- FLOOR เพื่อกันลง 0 ----------
+    min_nonzero = usage[usage > 0].min() if (usage > 0).any() else 0
+    base_floor = max(
+        1.0,
+        h_mean * 0.25 if h_mean > 0 else 0,
+        h_median * 0.5 if h_median > 0 else 0,
+        min_nonzero * 0.8 if min_nonzero else 0,
+    )
+
     # -------------------------------
-    # 2. SEASONAL CAP (ROBUST)
+    # 2. SEASONAL
     # -------------------------------
     df_history_all = df_history_all.copy()
     df_history_all["Date"] = pd.to_datetime(df_history_all["Date"])
@@ -244,7 +256,7 @@ def recursive_predict_monthly(
     )
 
     # -------------------------------
-    # 3. SEED HISTORY
+    # 3. SEED
     # -------------------------------
     history = (
         usage.head(time_steps).tolist()
@@ -261,7 +273,7 @@ def recursive_predict_monthly(
     preds = []
 
     # -------------------------------
-    # 4. FORECAST LOOP
+    # 4. LOOP
     # -------------------------------
     for step in range(1, predict_months + 1):
 
@@ -269,16 +281,18 @@ def recursive_predict_monthly(
         month_cap = seasonal_p90.get(target_month, h_p75)
 
         if semi_intermittent:
-            usage_cap = max(h_p75 * 1.1, h_median * 1.3)
+            usage_cap = max(h_p75 * 1.1, h_median * 1.25)
         else:
-            usage_cap = max(h_p90 * 1.15, h_mean * 1.2)
+            usage_cap = max(h_p90 * 1.18, h_mean * 1.25)
 
+        usage_cap = min(usage_cap, month_cap * 1.18)
+
+        # --------- Build sequence ---------
         seq = []
         for i in range(time_steps):
             rec = {f: sku_row.get(f, 0) for f in features}
             rec["Usage_Qty"] = history[-time_steps + i]
 
-            # ignore patient for chart
             for p in ["Patient_E", "Patient_I", "Patient_O"]:
                 if p in rec:
                     rec[p] = 0.0
@@ -292,45 +306,48 @@ def recursive_predict_monthly(
 
         x = scaler_x.transform(df_seq[features].values)
         y = scaler_y.transform(df_seq[["Usage_Qty"]].values)
-
         model_in = np.array([np.hstack([x, y])])
-        raw = lstm_model.predict(model_in, verbose=0)
 
+        raw = lstm_model.predict(model_in, verbose=0)
         pred = scaler_y.inverse_transform(raw)[0][0]
 
         # -------------------------------
         # 5. STABILIZATION
         # -------------------------------
         anchor = h_median if h_median > 0 else h_mean
-        alpha = 0.55 if semi_intermittent else min(0.65, 0.55 + step * 0.02)
-
+        alpha = 0.65 if not semi_intermittent else 0.50
         stabilized = (pred * alpha) + (anchor * (1 - alpha))
 
-        # SOFT CAP
-        if stabilized > usage_cap:
-            stabilized = usage_cap * 0.95 + np.random.uniform(-1.0, 1.0)
+        # growth clamp แต่ไม่แรงเกิน
+        if len(history) > 0:
+            last_real = history[-1]
+            max_allowed = last_real * 1.7
+            stabilized = min(stabilized, max_allowed)
 
-        # FLOOR
+        # soft cap
+        if stabilized > usage_cap:
+            stabilized = usage_cap * np.random.uniform(0.93, 0.99)
+
+        # momentum (กันนิ่งตรง)
+        if len(preds) >= 2:
+            diff = preds[-1] - preds[-2]
+            stabilized += diff * 0.35
+
+        # --------- ANTI ZERO ----------
+        if stabilized <= base_floor:
+            stabilized = base_floor * np.random.uniform(0.95, 1.08)
+
         stabilized = max(0.0, stabilized)
 
-        # BREAK CONSTANT LOOP
-        if len(preds) >= 2:
-            if abs(preds[-1] - stabilized) < 0.5:
-                stabilized *= np.random.uniform(0.96, 1.04)
+        # randomness เล็กน้อย
+        stabilized *= np.random.uniform(0.98, 1.03)
 
-        # -------------------------------
-        # 6. CONVERT TO INTEGER (FINAL)
-        # -------------------------------
-        stabilized_int = int(round(stabilized))
+        preds.append(int(round(stabilized)))
 
-        preds.append(stabilized_int)
-        history.append(stabilized_int)
+        # history ใช้ float
+        history.append(stabilized)
 
     return preds
-
-
-
-
 # ⭐⭐⭐ END OF RECURSIVE PREDICTION FUNCTION ⭐⭐⭐
 
 
@@ -418,10 +435,10 @@ def get_monthly_chart_data(sku_list, sku_to_item_name_map, metadata, lstm_model,
     return all_chart_data
 
 
-def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: bytes, forecast_days: int,is_upload: bool = False) -> Dict[str, Any]:
+def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: bytes, forecast_days: int, is_upload: bool = False) -> Dict[str, Any]:
     """
-    Main function: reads Excel bytes, classifies lead-time risk, forecasts (LSTM if available),
-    creates rule-based recommendations, and returns forecast + metrics, including Monthly Chart data.
+    ฟังก์ชันพยากรณ์และวางแผนสต็อกที่ทำงานสัมพันธ์กับกราฟและช่วงเวลาที่เลือก
+    โดยใช้ค่าเฉลี่ยคนไข้จากอดีต 3 ปีมาคำนวณโดยอัตโนมัติ
     """
     lstm_model = system_artifacts.get('lstm_model')
     xgb_classifier = system_artifacts.get('xgb_classifier')
@@ -429,240 +446,131 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
     scaler_y = system_artifacts.get('scaler_y')
     metadata = system_artifacts.get('metadata', {})
 
-    # Load input snapshot (first sheet)
+    # 1. โหลดข้อมูลและจัดการชื่อคอลัมน์ให้ยืดหยุ่น
     df_latest = pd.read_excel(BytesIO(file_content), sheet_name=0)
     df_latest.columns = df_latest.columns.str.strip()
-
-    # Renaming map (extend if needed)
-    RENAME_MAP = {
-        'Next_Patient_Count_M1': 'Patient_Count',
-        'Latest_Usage_Qty': 'Usage_Qty',
-        'Min_Stock': 'Safety_Stock_Qty',
-        'Current_Stock': 'Stock_on_Hand_Qty',
-        'Cost_Per_Unit': 'Unit_Cost',
-        'Item Name': 'Item_Name',
-        'ItemName': 'Item_Name',
-        'Product Name': 'Item_Name',
-        'Description': 'Item_Name',
-        'Max_Stock': 'Max_Stock_Qty',
-        'Max Stock': 'Max_Stock_Qty',
-        'Next_Patient_E_M1': 'Patient_E',
-        'Next_Patient_I_M1': 'Patient_I',
-        'Next_Patient_O_M1': 'Patient_O',
-    }
-    columns_to_rename = {k: v for k, v in RENAME_MAP.items() if k in df_latest.columns}
-    if columns_to_rename:
-        df_latest.rename(columns=columns_to_rename, inplace=True)
-
-    # Ensure required columns exist and types are numeric where appropriate
-    if 'Item_Name' not in df_latest.columns:
-        df_latest['Item_Name'] = None
-    if 'Max_Stock_Qty' not in df_latest.columns:
-        df_latest['Max_Stock_Qty'] = 0
-    if 'Unit_Cost' not in df_latest.columns:
-        df_latest['Unit_Cost'] = 0
-    if 'SKU' not in df_latest.columns:
-        raise KeyError('Input Excel must contain a SKU column')
     
-    # Normalize SKU to string for stable operations
-    df_latest['SKU'] = df_latest['SKU'].astype(str)
-
-    # 🔥 FIX 1: Remove duplicate SKUs from the input DataFrame.
+    RENAME_MAP = {
+        'Latest Usage Qty': 'Usage_Qty', 'Latest_Usage_Qty': 'Usage_Qty',
+        'Min Stock': 'Safety_Stock_Qty', 'Min_Stock': 'Safety_Stock_Qty',
+        'Current Stock': 'Stock_on_Hand_Qty', 'Current_Stock': 'Stock_on_Hand_Qty',
+        'Max Stock': 'Max_Stock_Qty', 'Max_Stock': 'Max_Stock_Qty',
+        'Unit Cost': 'Unit_Cost', 'Cost_Per_Unit': 'Unit_Cost',
+        'Lead Time Days': 'Lead_Time_Days', 'Item Name': 'Item_Name'
+    }
+    df_latest.rename(columns={k: v for k, v in RENAME_MAP.items() if k in df_latest.columns}, inplace=True)
+    df_latest['SKU'] = df_latest['SKU'].astype(str).str.strip()
     df_latest.drop_duplicates(subset=['SKU'], keep='last', inplace=True)
 
-    # Map common column variants
-    if 'Usage_Qty' in df_latest.columns:
-        df_latest['Usage_Qty'] = pd.to_numeric(df_latest['Usage_Qty'], errors='coerce').fillna(0)
-    else:
-        df_latest['Usage_Qty'] = 0
-
-    # Ensure numeric columns exist and are filled
-    numeric_cols_defaults = {
-        'Stock_on_Hand_Qty': 0,
-        'Safety_Stock_Qty': 0,
-        'Unit_Cost': 0,
-        'Lead_Time_Days': 14,
-        'Max_Stock_Qty': 0,
-        'Conversion_Factor': 1
+    # จัดการค่าเริ่มต้นและแปลงเป็นตัวเลข
+    numeric_defaults = {
+        'Stock_on_Hand_Qty': 0, 'Safety_Stock_Qty': 0, 
+        'Unit_Cost': 0, 'Lead_Time_Days': 14, 'Max_Stock_Qty': 0
     }
-    for col, default in numeric_cols_defaults.items():
-        if col not in df_latest.columns:
-            df_latest[col] = default
-        else:
-            df_latest[col] = pd.to_numeric(df_latest[col], errors='coerce').fillna(default)
+    for col, default in numeric_defaults.items():
+        if col not in df_latest.columns: df_latest[col] = default
+        df_latest[col] = pd.to_numeric(df_latest[col], errors='coerce').fillna(default)
 
-    # Apply conversion factor if given (to standardize units)
-    if 'Conversion_Factor' in df_latest.columns:
-        conv = df_latest['Conversion_Factor'].fillna(1)
-        df_latest['Usage_Qty'] = df_latest['Usage_Qty'] * conv
-        df_latest['Stock_on_Hand_Qty'] = df_latest['Stock_on_Hand_Qty'] * conv
-
-    # Classifier features fallback
-    class_features = metadata.get('class_features', ['Unit_Cost', 'Safety_Stock_Qty'])
-    for f in class_features:
-        if f not in df_latest.columns:
-            df_latest[f] = 0
-
-    # Predict LT category if classifier present
-    if xgb_classifier is not None:
-        try:
-            X_class_input = df_latest[class_features].fillna(0)
-            df_latest['LT_CATEGORY_PRED'] = xgb_classifier.predict(X_class_input)
-        except Exception:
-            df_latest['LT_CATEGORY_PRED'] = 0
-    else:
-        df_latest['LT_CATEGORY_PRED'] = 0
-
-    # Outputs for Action Items
-    forecast_result_rows: List[Dict[str, Any]] = []
-    all_actions: List[Dict[str, Any]] = []
-    sku_policy_map = metadata.get('sku_policy_map', {})
-
-    # Forecast start date = tomorrow (midnight + 1 day) - Used for Action Items only
-    current_time = datetime.datetime.now()
-    today_midnight = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-    start_date = today_midnight + timedelta(days=1)
+    # 2. โหลดประวัติข้อมูล 3 ปี เพื่อหา Seasonal Patient Map (ค่าเฉลี่ยคนไข้รายเดือน)
+    file_path_hist = os.path.join(DATA_DIR, 'Training_Data_Final.xlsx')
+    df_history_all = pd.read_excel(file_path_hist) if os.path.exists(file_path_hist) else pd.DataFrame()
     
-    # Collect all unique SKUs for processing
-    unique_skus = df_latest['SKU'].unique().tolist() 
+    patient_seasonal_avg = {}
+    if not df_history_all.empty:
+        df_history_all['SKU'] = df_history_all['SKU'].astype(str).str.strip()
+        df_history_all['Date'] = pd.to_datetime(df_history_all['Date'])
+        # ⭐ คำนวณค่าเฉลี่ยคนไข้แยกรายเดือนจากข้อมูลย้อนหลัง
+        if 'Patient_Count' in df_history_all.columns:
+            patient_seasonal_avg = df_history_all.groupby(df_history_all['Date'].dt.month)['Patient_Count'].mean().to_dict()
+
+    all_actions = []
+    unique_skus = df_latest['SKU'].unique().tolist()
     sku_to_item_name_map = df_latest.set_index('SKU')['Item_Name'].to_dict()
 
-    # Iterate SKUs to calculate Action Items (using existing daily forecast logic)
+    # 3. ลูปคำนวณราย SKU เพื่อหา Action Items
     for _, row in df_latest.iterrows():
         sku = row['SKU']
-        lt_cat = row.get('LT_CATEGORY_PRED', 0)
+        up_usage = float(row.get('Usage_Qty', 0))
 
-        item_name_raw = row.get('Item_Name')
-        item_name = str(item_name_raw).strip() if not pd.isna(item_name_raw) and str(item_name_raw).strip() != '' else f'SKU {sku}'
-
-
-        # ---------- Forecasting (Re-run for Action Item Daily Demand Sum) ----------
-        predicted_usage_monthly = float(row.get('Usage_Qty', 0) or 0) 
+        # 3.1 พยากรณ์รายเดือนด้วย LSTM (สัมพันธ์กับจำนวนวันที่เลือก)
+        future_vals = []
+        months_to_predict = max(1, math.ceil(forecast_days / 30) + 1)
         
-        # Get U_hat for ROP/Coverage calculation 
-        if lstm_model and scaler_x and scaler_y:
+        if lstm_model and not df_history_all.empty:
             try:
-                input_seq = prepare_lstm_input(df_latest, sku, metadata, scaler_x, scaler_y, lt_cat)
-                scaled_pred = lstm_model.predict(input_seq, verbose=0)
-                if np.ndim(scaled_pred) == 2 and scaled_pred.shape[1] >= 1:
-                    actual_pred = scaler_y.inverse_transform(scaled_pred)[0][0]
-                else:
-                    actual_pred = float(np.mean(scaler_y.inverse_transform(scaled_pred.reshape(-1, 1))))
-                predicted_usage_monthly = float(max(0.0, actual_pred))
-            except Exception:
-                pass # Use fallback
+                # ⭐ ดึงค่าเฉลี่ยคนไข้ตามเดือนปัจจุบันมาใช้แทนการกรอกมือ
+                current_month = datetime.datetime.now().month
+                row_with_patient = row.copy()
+                row_with_patient['Patient_Count'] = patient_seasonal_avg.get(current_month, 1500)
+                
+                future_vals = recursive_predict_monthly(
+                    row_with_patient, sku, 0, metadata, lstm_model, 
+                    scaler_x, scaler_y, months_to_predict, df_history_all, False
+                )
+            except: 
+                future_vals = [up_usage] * months_to_predict
 
-        if predicted_usage_monthly == 0:
-            predicted_usage_monthly = float(row.get('Usage_Qty', 0) or 0)
-
-        # Average daily usage (used only as base rate for daily noise and ROP)
-        base_daily_usage_rate = predicted_usage_monthly / 30.0 if predicted_usage_monthly > 0 else 0.0
-
+        # 3.2 คำนวณความต้องการสะสม (Dynamic Demand Sum) ตาม Forecast Days จริง
         predicted_demand_sum = 0.0
-        
-        # Generate daily forecast for Action Item period (forecast_days)
-        for i in range(int(forecast_days)):
-            seed = _stable_seed_from_sku(sku, i)
-            np.random.seed(seed)
-            random_factor = np.random.uniform(0.95, 1.05)
-            predicted_daily_usage_float = base_daily_usage_rate * random_factor
-            predicted_daily_usage = max(0.0, float(predicted_daily_usage_float))
-            
-            # Summing up demand over the entire forecast period
-            predicted_demand_sum += predicted_daily_usage 
-            
-            forecast_date = start_date + timedelta(days=i)
-            # Keeping this daily data, although main chart uses monthly data now
-            forecast_result_rows.append({ 
-                'date': forecast_date.isoformat(),
-                'predicted_usage': predicted_daily_usage,
-                'SKU': sku,
-                'Item_Name': item_name
-            })
-
-        # ---------- Rule-based recommendation (DYNAMICALLY LINKED TO forecast_days) ----------
-        Max_Stock = int(row.get('Max_Stock_Qty', 0) or 0)
-        Min_Stock = float(row.get('Safety_Stock_Qty', 0) or 0)
-        UC = float(row.get('Unit_Cost', 0) or 0)
-        LT_Days = int(row.get('Lead_Time_Days', 14) or 14)
-        SOH = float(row.get('Stock_on_Hand_Qty', 0) or 0)
-
-        
-        # ROP Threshold (Static part based on Lead Time)
-        rop_threshold = (base_daily_usage_rate * LT_Days) + Min_Stock
-        
-        # Dynamic Coverage Threshold (Based on Forecast Days)
-        needed_for_forecast = predicted_demand_sum + Min_Stock
-
-        stock_out_date = None
-        reorder_qty_float = 0.0
-
-        # Determine priority based on ROP and Forecast Coverage (DYNAMIC)
-        is_high_risk = (SOH < rop_threshold) 
-        is_medium_risk = (not is_high_risk) and (SOH < needed_for_forecast) 
-        
-        if is_high_risk:
-            priority_group = 'High Priority'
-        elif is_medium_risk:
-            priority_group = 'Medium Priority'
+        days_rem = forecast_days
+        if future_vals:
+            for m_val in future_vals:
+                if days_rem <= 0: break
+                if days_rem >= 30:
+                    predicted_demand_sum += m_val
+                    days_rem -= 30
+                else:
+                    predicted_demand_sum += (m_val / 30.0) * days_rem
+                    days_rem = 0
+            base_daily_rate = future_vals[0] / 30.0
         else:
-            priority_group = 'Low Priority'
+            base_daily_rate = up_usage / 30.0
+            predicted_demand_sum = base_daily_rate * forecast_days
 
-        # Reorder Calculation based on Dynamic Policy
-        if priority_group in ['High Priority', 'Medium Priority']:
-            if Max_Stock > 0:
-                final_target_stock = min(Max_Stock, needed_for_forecast)
-                reorder_qty_float = max(0.0, final_target_stock - SOH)
-            else:
-                reorder_qty_float = max(0.0, predicted_demand_sum + Min_Stock - SOH)
-        
-        reorder_qty = int(math.ceil(reorder_qty_float))
-        reorder_cost = reorder_qty * UC
-        
-        # Stock out date calculation
-        if base_daily_usage_rate > 0 and SOH < (base_daily_usage_rate * LT_Days):
-            days_until_out = int(max(0, math.floor(SOH / base_daily_usage_rate)))
-            stock_out_date = (start_date + timedelta(days=days_until_out)).strftime('%Y-%m-%d')
+        # 3.3 วิเคราะห์ความสำคัญ (Priority) และยอดสั่งซื้อ
+        SOH = row['Stock_on_Hand_Qty']
+        Min_Stock = row['Safety_Stock_Qty']
+        Max_Stock = row['Max_Stock_Qty']
+        LT_Days = row['Lead_Time_Days']
+
+        rop_threshold = (base_daily_rate * LT_Days) + Min_Stock
+        needed_for_period = predicted_demand_sum + Min_Stock
+
+        if SOH < rop_threshold: priority = 'High Priority'
+        elif SOH < needed_for_period: priority = 'Medium Priority'
+        else: priority = 'Low Priority'
+
+        reorder_qty = 0
+        if priority != 'Low Priority':
+            target = min(Max_Stock, needed_for_period) if Max_Stock > 0 else needed_for_period
+            reorder_qty = max(0, int(math.ceil(target - SOH)))
 
         all_actions.append({
             'sku': sku,
-            'item_name': item_name,
-            'priority': priority_group, 
-            'stock_out_date': stock_out_date if stock_out_date else 'N/A',
-            'recommended_qty': int(reorder_qty), 
-            'reorder_cost': round(reorder_cost, 2), 
+            'item_name': row.get('Item_Name', f'SKU {sku}'),
+            'priority': priority,
+            'recommended_qty': reorder_qty,
+            'reorder_cost': round(reorder_qty * row['Unit_Cost'], 2),
             'current_soh': int(round(SOH)),
             'rop_threshold': int(round(rop_threshold)),
             'max_stock_policy': int(Max_Stock),
-            'lead_time_days': LT_Days
+            'demand_for_period': int(round(predicted_demand_sum)),
+            'lead_time_days': int(LT_Days)
         })
 
-    # Sum reorder_cost across all items (DYNAMIC)
-    reorder_cost_total = round(sum(item['reorder_cost'] for item in all_actions), 2)
-    
-    # ⭐⭐⭐ GET MONTHLY CHART DATA (12 Actual + 4 Predict) ⭐⭐⭐
+    # 4. ดึงข้อมูลกราฟรายเดือน
     monthly_chart_data = get_monthly_chart_data(
-        sku_list=unique_skus, 
-        sku_to_item_name_map=sku_to_item_name_map,
-        metadata=metadata,
-        lstm_model=lstm_model,
-        scaler_x=scaler_x,
-        scaler_y=scaler_y,
-        df_latest=df_latest,
-        is_upload=is_upload
+        unique_skus, sku_to_item_name_map, metadata, 
+        lstm_model, scaler_x, scaler_y, df_latest, is_upload
     )
-    # ⭐⭐⭐ END MONTHLY CHART DATA STEP ⭐⭐⭐
 
     return {
-        "Daily_Forecast_Data": forecast_result_rows, 
-        
-        "Monthly_Chart_Data": monthly_chart_data, # 🆕 New Key for the chart
-        
+        "Monthly_Chart_Data": monthly_chart_data,
         "metrics": {
-            'total_skus': int(len(df_latest)), 
-            'high_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'High Priority'], 
-            'medium_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'Medium Priority'], 
-            'reorder_cost_total': reorder_cost_total, 
-            'action_items': all_actions, 
+            'total_skus': int(len(df_latest)),
+            'high_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'High Priority'],
+            'medium_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'Medium Priority'],
+            'reorder_cost_total': round(sum(item['reorder_cost'] for item in all_actions), 2),
+            'action_items': all_actions,
         }
     }
