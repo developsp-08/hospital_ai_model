@@ -17,27 +17,31 @@ load_dotenv()
 
 import tensorflow as tf
 load_model = tf.keras.models.load_model  
+
+BASE_DIR = os.getcwd() # หรือระบุ path หลักของโปรเจกต์
+MODEL_DIR = os.path.join(BASE_DIR, 'models')
+DATA_DIR = os.path.join(BASE_DIR, 'data')
     
     
-# --- 🆕 S3 Helper Configuration ---
-S3_BUCKET = os.environ.get('S3_BUCKET_NAME')
-S3_REGION = os.environ.get('AWS_REGION', 'ap-southeast-1')
+# # --- 🆕 S3 Helper Configuration ---
+# S3_BUCKET = os.environ.get('S3_BUCKET_NAME')
+# S3_REGION = os.environ.get('AWS_REGION', 'ap-southeast-1')
 
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-    region_name=S3_REGION
-)
+# s3_client = boto3.client(
+#     's3',
+#     aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+#     aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+#     region_name=S3_REGION
+# )
 
-def load_s3_bytes(file_key: str) -> BytesIO:
-    """ดึงไฟล์จาก S3 และส่งคืนเป็น BytesIO"""
-    try:
-        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=file_key)
-        return BytesIO(obj['Body'].read())
-    except Exception as e:
-        print(f"Error loading {file_key} from S3: {e}")
-        return None
+# def load_s3_bytes(file_key: str) -> BytesIO:
+#     """ดึงไฟล์จาก S3 และส่งคืนเป็น BytesIO"""
+#     try:
+#         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=file_key)
+#         return BytesIO(obj['Body'].read())
+#     except Exception as e:
+#         print(f"Error loading {file_key} from S3: {e}")
+#         return None
 
 # 🆕 กำหนดกรอบเวลาตายตัวสำหรับกราฟ
 ACTUAL_MONTHS = 12 
@@ -55,32 +59,46 @@ def load_model_system() -> Dict[str, Any]:
 
     # 1. load LSTM model (Keras จำเป็นต้องโหลดจากไฟล์จริงในดิสก์)
     try:
-        if load_model:
-            model_bytes = load_s3_bytes('inventory_lstm_model.h5')
-            if model_bytes:
-                # บันทึกลง /tmp ของ Vercel ชั่วคราว
-                temp_path = "/tmp/temp_lstm_model.h5"
-                with open(temp_path, "wb") as f:
-                    f.write(model_bytes.getbuffer())
-                artifacts['lstm_model'] = load_model(temp_path)
+        model_path = os.path.join(MODEL_DIR, 'inventory_lstm_model.h5')
+        if os.path.exists(model_path):
+            artifacts['lstm_model'] = load_model(model_path)
+            print(f"✅ Loaded LSTM model from {model_path}")
     except Exception as e:
         print(f"LSTM Load Error: {e}")
 
     # 2. load pickled artifacts (โหลดตรงจาก Memory ได้เลย)
+    # try:
+    #     xgb_bytes = load_s3_bytes('lead_time_classifier.pkl')
+    #     if xgb_bytes: artifacts['xgb_classifier'] = joblib.load(xgb_bytes)
+        
+    #     sx_bytes = load_s3_bytes('scaler_x.pkl')
+    #     if sx_bytes: artifacts['scaler_x'] = joblib.load(sx_bytes)
+        
+    #     sy_bytes = load_s3_bytes('scaler_y.pkl')
+    #     if sy_bytes: artifacts['scaler_y'] = joblib.load(sy_bytes)
+        
+    #     meta_bytes = load_s3_bytes('model_metadata.pkl')
+    #     if meta_bytes: artifacts['metadata'] = joblib.load(meta_bytes)
+        
+    #     print("✅ All artifacts loaded successfully from S3")
+    # except Exception as e:
+    #     print(f"Pickle Load Error: {e}")
+    
     try:
-        xgb_bytes = load_s3_bytes('lead_time_classifier.pkl')
-        if xgb_bytes: artifacts['xgb_classifier'] = joblib.load(xgb_bytes)
+        files_to_load = {
+            'xgb_classifier': 'lead_time_classifier.pkl',
+            'scaler_x': 'scaler_x.pkl',
+            'scaler_y': 'scaler_y.pkl',
+            'metadata': 'model_metadata.pkl'
+        }
+
+        for key, filename in files_to_load.items():
+            file_path = os.path.join(MODEL_DIR, filename)
+            if os.path.exists(file_path):
+                artifacts[key] = joblib.load(file_path)
+                print(f"✅ Loaded {filename}")
         
-        sx_bytes = load_s3_bytes('scaler_x.pkl')
-        if sx_bytes: artifacts['scaler_x'] = joblib.load(sx_bytes)
-        
-        sy_bytes = load_s3_bytes('scaler_y.pkl')
-        if sy_bytes: artifacts['scaler_y'] = joblib.load(sy_bytes)
-        
-        meta_bytes = load_s3_bytes('model_metadata.pkl')
-        if meta_bytes: artifacts['metadata'] = joblib.load(meta_bytes)
-        
-        print("✅ All artifacts loaded successfully from S3")
+        print("✅ All artifacts loaded successfully from local storage")
     except Exception as e:
         print(f"Pickle Load Error: {e}")
 
@@ -96,11 +114,12 @@ def load_model_system() -> Dict[str, Any]:
 #         return f.read()
 
 def get_reference_data() -> bytes:
-    """ปรับปรุง: อ่าน Excel จาก S3"""
-    excel_bytes = load_s3_bytes('Training_Data_Final.xlsx')
-    if not excel_bytes:
-        raise FileNotFoundError("Reference Excel file not found on S3.")
-    return excel_bytes.getvalue()
+    file_path = os.path.join(DATA_DIR, 'Training_Data_Final.xlsx')
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Reference Excel file not found at: {file_path}")
+    
+    with open(file_path, 'rb') as f:
+        return f.read()
 
 def _stable_seed_from_sku(sku: Any, offset: int = 0) -> int:
     """Deterministic seed from SKU + offset using MD5 (stable across runs)."""
@@ -321,10 +340,15 @@ def get_monthly_chart_data(sku_list, sku_to_item_name_map, metadata, lstm_model,
     
     
     # ปรับปรุง: ดึงไฟล์ประวัติจาก S3
-    excel_bytes = load_s3_bytes('Training_Data_Final.xlsx')
-    if not excel_bytes: return []
+    # excel_bytes = load_s3_bytes('Training_Data_Final.xlsx')
+    # if not excel_bytes: return []
+    
+    file_path = os.path.join(DATA_DIR, 'Training_Data_Final.xlsx')
+    if not os.path.exists(file_path):
+        print(f"History file not found at {file_path}")
+        return []
 
-    df_history = pd.read_excel(excel_bytes)
+    df_history = pd.read_excel(file_path)
     df_history.columns = df_history.columns.str.strip()
     df_history['Date'] = pd.to_datetime(df_history['Date'])
     df_history['SKU'] = df_history['SKU'].astype(str).str.strip()
