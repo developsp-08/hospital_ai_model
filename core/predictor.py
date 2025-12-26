@@ -315,7 +315,7 @@ def recursive_predict_monthly(
 # ⭐⭐⭐ END OF RECURSIVE PREDICTION FUNCTION ⭐⭐⭐
 
 
-def get_monthly_chart_data(sku_list, sku_to_item_name_map, metadata, lstm_model, scaler_x, scaler_y, df_latest):
+def get_monthly_chart_data(sku_list, sku_to_item_name_map, metadata, lstm_model, scaler_x, scaler_y, df_latest, is_upload=False):
     all_chart_data = []
     time_steps = int(metadata.get('time_steps', 12))
     
@@ -330,6 +330,22 @@ def get_monthly_chart_data(sku_list, sku_to_item_name_map, metadata, lstm_model,
     df_history['SKU'] = df_history['SKU'].astype(str).str.strip()
     df_history['Month_Year'] = df_history['Date'].dt.to_period('M').dt.to_timestamp()
     df_monthly_agg = df_history.groupby(['Month_Year', 'SKU']).agg({'Usage_Qty': 'sum'}).reset_index()
+    
+    # new predict from upload file
+    if is_upload:
+        current_month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        for _, upload_row in df_latest.iterrows():
+            sku_val = str(upload_row['SKU']).strip()
+            new_usage = float(upload_row.get('Usage_Qty', 0))
+            
+            mask = (df_monthly_agg['SKU'] == sku_val) & (df_monthly_agg['Month_Year'] == current_month_start)
+            if mask.any():
+                df_monthly_agg.loc[mask, 'Usage_Qty'] = new_usage
+            else:
+                new_record = pd.DataFrame([{'Month_Year': current_month_start, 'SKU': sku_val, 'Usage_Qty': new_usage}])
+                df_monthly_agg = pd.concat([df_monthly_agg, new_record], ignore_index=True)
+    
+    
 
     for sku in sku_list:
         sku_clean = str(sku).strip()
@@ -378,7 +394,7 @@ def get_monthly_chart_data(sku_list, sku_to_item_name_map, metadata, lstm_model,
     return all_chart_data
 
 
-def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: bytes, forecast_days: int) -> Dict[str, Any]:
+def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: bytes, forecast_days: int,is_upload: bool = False) -> Dict[str, Any]:
     """
     Main function: reads Excel bytes, classifies lead-time risk, forecasts (LSTM if available),
     creates rule-based recommendations, and returns forecast + metrics, including Monthly Chart data.
@@ -608,7 +624,8 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
         lstm_model=lstm_model,
         scaler_x=scaler_x,
         scaler_y=scaler_y,
-        df_latest=df_latest
+        df_latest=df_latest,
+        is_upload=is_upload
     )
     # ⭐⭐⭐ END MONTHLY CHART DATA STEP ⭐⭐⭐
 

@@ -57,7 +57,7 @@ async def predict_inventory_from_file(
     
     file_content = await file.read()
     try:
-        results = predict_inventory_usage(metadata, file_content, forecast_days)
+        results = predict_inventory_usage(metadata, file_content, forecast_days, is_upload=True)
         
         # Format for Dashboard
         return {
@@ -88,7 +88,7 @@ async def initial_forecast(
         file_content = get_reference_data() 
         
         # 2. รัน prediction logic
-        results = predict_inventory_usage(metadata, file_content, forecast_days)
+        results = predict_inventory_usage(metadata, file_content, forecast_days, is_upload=False)
 
         # 3. Format และคืนค่าผลลัพธ์ (ใช้โครงสร้างเดียวกับ /predict)
         return {
