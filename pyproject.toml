@@ -2,11 +2,14 @@
 name = "hospital-ai-model"
 version = "1.0.0"
 requires-python = ">=3.12,<3.13"
+
 dependencies = [
   "fastapi==0.115.6",
   "starlette==0.41.3",
   "python-multipart==0.0.9",
+
   "pandas==2.2.3",
   "numpy==2.0.2",
-  "openpyxl==3.1.5"
+  "openpyxl==3.1.5",
+  "joblib==1.4.2"
 ]
