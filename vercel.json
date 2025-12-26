@@ -1,8 +1,7 @@
 {
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/main.py"
+  "functions": {
+    "api/**/*.py": {
+      "maxDuration": 30
     }
-  ]
+  }
 }
