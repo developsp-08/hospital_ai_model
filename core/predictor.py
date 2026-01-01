@@ -341,6 +341,23 @@ def recursive_predict_monthly(
 
         # randomness เล็กน้อย
         stabilized *= np.random.uniform(0.98, 1.03)
+        
+        
+        
+        # 🆕 -------------------------------
+        # 6. USER-DEFINED CONSTRAINTS (Max/Min from Excel)
+        # -------------------------------
+        # ดึงค่าจาก sku_row ที่อ่านมาจากไฟล์ Excel (ถ้าไม่มีคอลัมน์นี้ให้ใช้ค่า Default)
+        user_max_limit = sku_row.get('Max_Predict', 999999999.0)
+        user_min_limit = sku_row.get('Min_Predict', 0.0)
+
+        # ตรวจสอบและบังคับค่าให้อยู่ในช่วงที่ User กำหนด
+        if stabilized > user_max_limit:
+            stabilized = float(user_max_limit)
+        elif stabilized < user_min_limit:
+            stabilized = float(user_min_limit)
+            
+            
 
         preds.append(int(round(stabilized)))
 
@@ -456,7 +473,13 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
         'Current Stock': 'Stock_on_Hand_Qty', 'Current_Stock': 'Stock_on_Hand_Qty',
         'Max Stock': 'Max_Stock_Qty', 'Max_Stock': 'Max_Stock_Qty',
         'Unit Cost': 'Unit_Cost', 'Cost_Per_Unit': 'Unit_Cost',
-        'Lead Time Days': 'Lead_Time_Days', 'Item Name': 'Item_Name'
+        'Lead Time Days': 'Lead_Time_Days', 'Item Name': 'Item_Name',
+        
+        # 🆕 เพิ่มการรองรับคอลัมน์ควบคุมการ Predict
+        'Max Predict': 'Max_Predict', 
+        'Max_Predict': 'Max_Predict',
+        'Min Predict': 'Min_Predict',
+        'Min_Predict': 'Min_Predict'
     }
     df_latest.rename(columns={k: v for k, v in RENAME_MAP.items() if k in df_latest.columns}, inplace=True)
     df_latest['SKU'] = df_latest['SKU'].astype(str).str.strip()
@@ -465,7 +488,11 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
     # จัดการค่าเริ่มต้นและแปลงเป็นตัวเลข
     numeric_defaults = {
         'Stock_on_Hand_Qty': 0, 'Safety_Stock_Qty': 0, 
-        'Unit_Cost': 0, 'Lead_Time_Days': 14, 'Max_Stock_Qty': 0
+        'Unit_Cost': 0, 'Lead_Time_Days': 14, 'Max_Stock_Qty': 0,
+        
+        # 🆕 ค่า Default ของขอบเขตการทาย (ถ้าไม่ระบุให้ถือว่าไม่มีเพดาน)
+        'Max_Predict': 999999999.0,
+        'Min_Predict': 0.0
     }
     for col, default in numeric_defaults.items():
         if col not in df_latest.columns: df_latest[col] = default
