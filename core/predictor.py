@@ -18,7 +18,7 @@ load_dotenv()
 import tensorflow as tf
 load_model = tf.keras.models.load_model  
 
-BASE_DIR = os.getcwd() # หรือระบุ path หลักของโปรเจกต์
+BASE_DIR = os.getcwd() 
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
     
@@ -61,7 +61,11 @@ def load_model_system() -> Dict[str, Any]:
     try:
         model_path = os.path.join(MODEL_DIR, 'inventory_lstm_model.h5')
         if os.path.exists(model_path):
-            artifacts['lstm_model'] = load_model(model_path)
+            artifacts['lstm_model'] = load_model(
+                model_path, 
+                custom_objects={'mse': tf.keras.losses.MeanSquaredError()},
+                compile=False 
+            )
             print(f"✅ Loaded LSTM model from {model_path}")
     except Exception as e:
         print(f"LSTM Load Error: {e}")
