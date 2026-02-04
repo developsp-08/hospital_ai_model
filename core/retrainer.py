@@ -99,7 +99,8 @@ def run_retrain_process():
             
        
         model = tf.keras.models.load_model(model_path, compile=False) 
-        model.compile(optimizer='adam', loss='mse', metrics=['mae']) 
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
+        model.compile(optimizer=optimizer, loss='mse', metrics=['mae']) 
         
         logger.info(f"Model re-compiled. Training shape: {X_train.shape}")
         
@@ -107,7 +108,7 @@ def run_retrain_process():
         model.fit(
             X_train, 
             y_train, 
-            epochs=100, 
+            epochs=10, 
             batch_size=32, 
             verbose=1, 
             shuffle=False
