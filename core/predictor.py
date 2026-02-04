@@ -439,11 +439,151 @@ def get_monthly_chart_data(sku_list, sku_to_item_name_map, metadata, lstm_model,
     return all_chart_data
 
 
+# def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: bytes, forecast_days: int, is_upload: bool = False) -> Dict[str, Any]:
+#     """
+#     ฟังก์ชันพยากรณ์และวางแผนสต็อกที่ทำงานสัมพันธ์กับกราฟและช่วงเวลาที่เลือก
+#     โดยใช้ค่าเฉลี่ยคนไข้จากอดีต 3 ปีมาคำนวณโดยอัตโนมัติ
+#     """
+#     lstm_model = system_artifacts.get('lstm_model')
+#     xgb_classifier = system_artifacts.get('xgb_classifier')
+#     scaler_x = system_artifacts.get('scaler_x')
+#     scaler_y = system_artifacts.get('scaler_y')
+#     metadata = system_artifacts.get('metadata', {})
+
+#     # 1. โหลดข้อมูลและจัดการชื่อคอลัมน์ให้ยืดหยุ่น
+#     df_latest = pd.read_excel(BytesIO(file_content), sheet_name=0)
+#     df_latest.columns = df_latest.columns.str.strip()
+    
+#     RENAME_MAP = {
+#         'Latest Usage Qty': 'Usage_Qty', 'Latest_Usage_Qty': 'Usage_Qty',
+#         'Min Stock': 'Safety_Stock_Qty', 'Min_Stock': 'Safety_Stock_Qty',
+#         'Current Stock': 'Stock_on_Hand_Qty', 'Current_Stock': 'Stock_on_Hand_Qty',
+#         'Max Stock': 'Max_Stock_Qty', 'Max_Stock': 'Max_Stock_Qty',
+#         'Unit Cost': 'Unit_Cost', 'Cost_Per_Unit': 'Unit_Cost',
+#         'Lead Time Days': 'Lead_Time_Days', 'Item Name': 'Item_Name'
+#     }
+#     df_latest.rename(columns={k: v for k, v in RENAME_MAP.items() if k in df_latest.columns}, inplace=True)
+#     df_latest['SKU'] = df_latest['SKU'].astype(str).str.strip()
+#     df_latest.drop_duplicates(subset=['SKU'], keep='last', inplace=True)
+
+#     # จัดการค่าเริ่มต้นและแปลงเป็นตัวเลข
+#     numeric_defaults = {
+#         'Stock_on_Hand_Qty': 0, 'Safety_Stock_Qty': 0, 
+#         'Unit_Cost': 0, 'Lead_Time_Days': 14, 'Max_Stock_Qty': 0
+#     }
+#     for col, default in numeric_defaults.items():
+#         if col not in df_latest.columns: df_latest[col] = default
+#         df_latest[col] = pd.to_numeric(df_latest[col], errors='coerce').fillna(default)
+
+#     # 2. โหลดประวัติข้อมูล 3 ปี เพื่อหา Seasonal Patient Map (ค่าเฉลี่ยคนไข้รายเดือน)
+#     file_path_hist = os.path.join(DATA_DIR, 'Training_Data_Final.xlsx')
+#     df_history_all = pd.read_excel(file_path_hist) if os.path.exists(file_path_hist) else pd.DataFrame()
+    
+#     patient_seasonal_avg = {}
+#     if not df_history_all.empty:
+#         df_history_all['SKU'] = df_history_all['SKU'].astype(str).str.strip()
+#         df_history_all['Date'] = pd.to_datetime(df_history_all['Date'])
+#         # ⭐ คำนวณค่าเฉลี่ยคนไข้แยกรายเดือนจากข้อมูลย้อนหลัง
+#         if 'Patient_Count' in df_history_all.columns:
+#             patient_seasonal_avg = df_history_all.groupby(df_history_all['Date'].dt.month)['Patient_Count'].mean().to_dict()
+
+#     all_actions = []
+#     unique_skus = df_latest['SKU'].unique().tolist()
+#     sku_to_item_name_map = df_latest.set_index('SKU')['Item_Name'].to_dict()
+
+#     # 3. ลูปคำนวณราย SKU เพื่อหา Action Items
+#     for _, row in df_latest.iterrows():
+#         sku = row['SKU']
+#         up_usage = float(row.get('Usage_Qty', 0))
+
+#         # 3.1 พยากรณ์รายเดือนด้วย LSTM (สัมพันธ์กับจำนวนวันที่เลือก)
+#         future_vals = []
+#         months_to_predict = max(1, math.ceil(forecast_days / 30) + 1)
+        
+#         if lstm_model and not df_history_all.empty:
+#             try:
+#                 # ⭐ ดึงค่าเฉลี่ยคนไข้ตามเดือนปัจจุบันมาใช้แทนการกรอกมือ
+#                 current_month = datetime.datetime.now().month
+#                 row_with_patient = row.copy()
+#                 row_with_patient['Patient_Count'] = patient_seasonal_avg.get(current_month, 1500)
+                
+#                 future_vals = recursive_predict_monthly(
+#                     row_with_patient, sku, 0, metadata, lstm_model, 
+#                     scaler_x, scaler_y, months_to_predict, df_history_all, False
+#                 )
+#             except: 
+#                 future_vals = [up_usage] * months_to_predict
+
+#         # 3.2 คำนวณความต้องการสะสม (Dynamic Demand Sum) ตาม Forecast Days จริง
+#         predicted_demand_sum = 0.0
+#         days_rem = forecast_days
+#         if future_vals:
+#             for m_val in future_vals:
+#                 if days_rem <= 0: break
+#                 if days_rem >= 30:
+#                     predicted_demand_sum += m_val
+#                     days_rem -= 30
+#                 else:
+#                     predicted_demand_sum += (m_val / 30.0) * days_rem
+#                     days_rem = 0
+#             base_daily_rate = future_vals[0] / 30.0
+#         else:
+#             base_daily_rate = up_usage / 30.0
+#             predicted_demand_sum = base_daily_rate * forecast_days
+
+#         # 3.3 วิเคราะห์ความสำคัญ (Priority) และยอดสั่งซื้อ
+#         SOH = row['Stock_on_Hand_Qty']
+#         Min_Stock = row['Safety_Stock_Qty']
+#         Max_Stock = row['Max_Stock_Qty']
+#         LT_Days = row['Lead_Time_Days']
+
+#         rop_threshold = (base_daily_rate * LT_Days) + Min_Stock
+#         needed_for_period = predicted_demand_sum + Min_Stock
+
+#         if SOH < rop_threshold: priority = 'High Priority'
+#         elif SOH < needed_for_period: priority = 'Medium Priority'
+#         else: priority = 'Low Priority'
+
+#         reorder_qty = 0
+#         if priority != 'Low Priority':
+#             target = min(Max_Stock, needed_for_period) if Max_Stock > 0 else needed_for_period
+#             reorder_qty = max(0, int(math.ceil(target - SOH)))
+
+#         all_actions.append({
+#             'sku': sku,
+#             'item_name': row.get('Item_Name', f'SKU {sku}'),
+#             'priority': priority,
+#             'recommended_qty': reorder_qty,
+#             'reorder_cost': round(reorder_qty * row['Unit_Cost'], 2),
+#             'current_soh': int(round(SOH)),
+#             'rop_threshold': int(round(rop_threshold)),
+#             'max_stock_policy': int(Max_Stock),
+#             'demand_for_period': int(round(predicted_demand_sum)),
+#             'lead_time_days': int(LT_Days)
+#         })
+
+#     # 4. ดึงข้อมูลกราฟรายเดือน
+#     monthly_chart_data = get_monthly_chart_data(
+#         unique_skus, sku_to_item_name_map, metadata, 
+#         lstm_model, scaler_x, scaler_y, df_latest, is_upload
+#     )
+
+#     return {
+#         "Monthly_Chart_Data": monthly_chart_data,
+#         "metrics": {
+#             'total_skus': int(len(df_latest)),
+#             'high_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'High Priority'],
+#             'medium_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'Medium Priority'],
+#             'reorder_cost_total': round(sum(item['reorder_cost'] for item in all_actions), 2),
+#             'action_items': all_actions,
+#         }
+#     }
+
+
+
+
 def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: bytes, forecast_days: int, is_upload: bool = False) -> Dict[str, Any]:
-    """
-    ฟังก์ชันพยากรณ์และวางแผนสต็อกที่ทำงานสัมพันธ์กับกราฟและช่วงเวลาที่เลือก
-    โดยใช้ค่าเฉลี่ยคนไข้จากอดีต 3 ปีมาคำนวณโดยอัตโนมัติ
-    """
+    # ... (ส่วนโหลดโมเดลและจัดการชื่อคอลัมน์เหมือนเดิมของคุณ) ...
     lstm_model = system_artifacts.get('lstm_model')
     xgb_classifier = system_artifacts.get('xgb_classifier')
     scaler_x = system_artifacts.get('scaler_x')
@@ -491,28 +631,37 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
     unique_skus = df_latest['SKU'].unique().tolist()
     sku_to_item_name_map = df_latest.set_index('SKU')['Item_Name'].to_dict()
 
-    # 3. ลูปคำนวณราย SKU เพื่อหา Action Items
+    # 3. ลูปคำนวณราย SKU
     for _, row in df_latest.iterrows():
         sku = row['SKU']
+        
+        # 🆕 --- ขั้นตอนการกรอง: ตรวจสอบประวัติ 12 เดือน ---
+        sku_history = df_history_all[df_history_all['SKU'] == sku]
+        if len(sku_history) < 12:
+            continue # ข้ามรายการนี้ไป ไม่ใส่ใน Response ตาราง
+        # ----------------------------------------------
+
         up_usage = float(row.get('Usage_Qty', 0))
 
         # 3.1 พยากรณ์รายเดือนด้วย LSTM (สัมพันธ์กับจำนวนวันที่เลือก)
         future_vals = []
         months_to_predict = max(1, math.ceil(forecast_days / 30) + 1)
         
-        if lstm_model and not df_history_all.empty:
-            try:
-                # ⭐ ดึงค่าเฉลี่ยคนไข้ตามเดือนปัจจุบันมาใช้แทนการกรอกมือ
-                current_month = datetime.datetime.now().month
-                row_with_patient = row.copy()
-                row_with_patient['Patient_Count'] = patient_seasonal_avg.get(current_month, 1500)
-                
-                future_vals = recursive_predict_monthly(
-                    row_with_patient, sku, 0, metadata, lstm_model, 
-                    scaler_x, scaler_y, months_to_predict, df_history_all, False
-                )
-            except: 
+        # 3.1 พยากรณ์รายเดือน
+        try:
+            current_month = datetime.datetime.now().month
+            row_with_patient = row.copy()
+            row_with_patient['Patient_Count'] = patient_seasonal_avg.get(current_month, 1500)
+            
+            future_vals = recursive_predict_monthly(
+                row_with_patient, sku, 0, metadata, lstm_model, 
+                scaler_x, scaler_y, months_to_predict, df_history_all, False
+            )
+            # ป้องกันค่าพยากรณ์เป็น 0 ถ้าข้อมูลจริงมีค่า
+            if sum(future_vals) == 0 and up_usage > 0:
                 future_vals = [up_usage] * months_to_predict
+        except: 
+            future_vals = [up_usage] * months_to_predict
 
         # 3.2 คำนวณความต้องการสะสม (Dynamic Demand Sum) ตาม Forecast Days จริง
         predicted_demand_sum = 0.0
@@ -571,7 +720,7 @@ def predict_inventory_usage(system_artifacts: Dict[str, Any], file_content: byte
     return {
         "Monthly_Chart_Data": monthly_chart_data,
         "metrics": {
-            'total_skus': int(len(df_latest)),
+            'total_skus': len(all_actions), # นับเฉพาะที่เจอเกิน 12 ครั้ง
             'high_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'High Priority'],
             'medium_priority_items': [i['sku'] for i in all_actions if i['priority'] == 'Medium Priority'],
             'reorder_cost_total': round(sum(item['reorder_cost'] for item in all_actions), 2),
