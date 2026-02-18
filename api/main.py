@@ -12,7 +12,8 @@ from io import BytesIO
 from datetime import datetime, timedelta
 import pandas as pd
 import json
-import numpy as np # จำเป็นสำหรับ Custom JSON Encoder
+import math 
+import numpy as np 
 # 🆕 เพิ่ม SQLAlchemy สำหรับเชื่อมต่อ Database
 from sqlalchemy import create_engine, text
 from core.retrainer import run_retrain_process
@@ -48,24 +49,47 @@ if DATABASE_URL:
         logger.error(f"❌ Failed to create DB engine: {e}")
 
 
-# 🆕 Custom Encoder เพื่อให้ save numpy data ลง json ได้ไม่ error
+# 🆕 Custom Encoder + Sanitizer
+# ฟังก์ชันทำความสะอาดข้อมูลก่อนส่งเป็น JSON (แก้ NaN และ Timestamp)
+def sanitize_for_json(obj):
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(v) for v in obj]
+    elif isinstance(obj, (np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.float64, np.float32)):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, (pd.Timestamp, datetime)):
+        return obj.isoformat()
+    return obj
+
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
             return int(obj)
         if isinstance(obj, np.floating):
+            if np.isnan(obj) or np.isinf(obj):
+                return None
             return float(obj)
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        if isinstance(obj, (datetime, pd.Timestamp)):
+            return obj.isoformat()
         return super(NpEncoder, self).default(obj)
 
-# 🆕 ฟังก์ชันสร้างตาราง (แยกออกมาเพื่อให้เรียกใช้ตอนเปิด Server ได้เลย)
+# 🆕 ฟังก์ชันสร้างตาราง
 def init_db_table():
     if not db_engine:
         return
     try:
         with db_engine.connect() as conn:
-            # สร้างตาราง upload_logs ถ้ายังไม่มี
             create_table_sql = text("""
             CREATE TABLE IF NOT EXISTS upload_logs (
                 id SERIAL PRIMARY KEY,
@@ -81,7 +105,7 @@ def init_db_table():
     except Exception as e:
         logger.error(f"❌ Failed to initialize database table: {e}")
 
-# 🆕 ฟังก์ชันสำหรับบันทึก Log ลง Neon Database (ปรับแก้ให้มีแค่ 1 Record และเวลาไทย)
+# 🆕 ฟังก์ชันสำหรับบันทึก Log ลง Neon Database
 def log_upload_to_neon(filename: str, status: str, forecast_days: int):
     if not db_engine:
         logger.warning("⚠️ No Database Engine found. Skipping DB logging.")
@@ -91,29 +115,23 @@ def log_upload_to_neon(filename: str, status: str, forecast_days: int):
         # 🕒 คำนวณเวลาประเทศไทย (UTC + 7 ชั่วโมง)
         thai_time = datetime.utcnow() + timedelta(hours=7)
 
-        # ใช้ Connection จาก Engine (จัดการเปิด-ปิดให้อัตโนมัติ)
         with db_engine.connect() as conn:
-            
-            # 1. ลบข้อมูลเก่าทั้งหมดทิ้งก่อน (DELETE ALL)
             delete_sql = text("DELETE FROM upload_logs;")
             conn.execute(delete_sql)
 
-            # 2. บันทึกข้อมูลใหม่ พร้อมเวลาไทย (INSERT NEW)
-            # ระบุคอลัมน์ upload_time ชัดเจน
             insert_sql = text("""
             INSERT INTO upload_logs (filename, status, forecast_days, upload_time)
             VALUES (:filename, :status, :days, :upload_time);
             """)
             
-            # ส่ง parameter แบบ Dictionary
             conn.execute(insert_sql, {
                 "filename": filename, 
                 "status": status, 
                 "days": forecast_days,
-                "upload_time": thai_time # ส่งเวลาไทยเข้าไป
+                "upload_time": thai_time 
             })
             
-            conn.commit() # ยืนยันการเปลี่ยนแปลง
+            conn.commit()
             
         logger.info(f"✅ Logged upload activity to Neon DB (Time: {thai_time}): {filename}")
         
@@ -135,25 +153,15 @@ def get_model_metadata() -> Dict[str, Any]:
 
 
 def manual_column_mapping(df_columns):
-    """จับคู่ชื่อหัวตารางจาก User เข้ากับมาตรฐานของระบบ (Hard-coded)"""
     mapping_dict = {
-        'รหัสสินค้า': 'SKU', 
-        'SKU ID': 'SKU', 
-        'Item No': 'SKU', 
-        'ชื่อรายการ': 'Item_Name', 
-        'ชื่อสินค้า': 'Item_Name',
-        'จำนวนเบิก': 'Usage_Qty', 
-        'เบิกจ่าย': 'Usage_Qty', 
-        'Latest_Usage_Qty': 'Usage_Qty',
-        'จำนวนคนไข้': 'Visit_Campus', 
-        'Current_Patient_Count': 'Visit_Campus',
-        'Lead_Time_Days': 'Lead_Time_Days',
-        'Unit_Cost': 'Unit_Cost',
-        'Min_Stock': 'Min_Stock',
-        'Max_Stock': 'Max_Stock',
+        'รหัสสินค้า': 'SKU', 'SKU ID': 'SKU', 'Item No': 'SKU', 
+        'ชื่อรายการ': 'Item_Name', 'ชื่อสินค้า': 'Item_Name',
+        'จำนวนเบิก': 'Usage_Qty', 'เบิกจ่าย': 'Usage_Qty', 'Latest_Usage_Qty': 'Usage_Qty',
+        'จำนวนคนไข้': 'Visit_Campus', 'Current_Patient_Count': 'Visit_Campus',
+        'Lead_Time_Days': 'Lead_Time_Days', 'Unit_Cost': 'Unit_Cost',
+        'Min_Stock': 'Min_Stock', 'Max_Stock': 'Max_Stock',
         'Conversion_Factor': 'Conversion_Factor'
     }
-    
     return {col: mapping_dict[col] for col in df_columns if col in mapping_dict}
 
 app = FastAPI(title="Hybrid Inventory AI", version="5.0")
@@ -166,29 +174,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🆕 สั่งให้สร้างตารางทันทีที่ Server เริ่มทำงาน
 @app.on_event("startup")
 async def startup_event():
     init_db_table()
 
-# 🆕 ENDPOINT ใหม่: สำหรับดึงข้อมูล Log ล่าสุดจาก Database
 @app.get("/latest_upload_log")
 async def get_latest_upload_log():
     if not db_engine:
         return None
     try:
         with db_engine.connect() as conn:
-            # ดึงข้อมูลแถวแรกสุด
             query = text("SELECT filename, upload_time, forecast_days FROM upload_logs LIMIT 1")
             result = conn.execute(query).fetchone()
             
             if result:
                 return {
                     "filename": result[0],
-                    "upload_time": result[1], # ส่ง DateTime กลับไป
+                    "upload_time": result[1],
                     "forecast_days": result[2]
                 }
-            return None # ถ้าไม่มีข้อมูล
+            return None 
     except Exception as e:
         logger.error(f"Error fetching latest log: {e}")
         return None
@@ -204,7 +209,6 @@ async def predict_inventory_from_file(
     if not metadata:
         raise HTTPException(status_code=503, detail="AI Model not ready.")
     
-    # อ่านชื่อไฟล์ก่อน await file.read() เพื่อเอาไปเก็บ Log
     filename = file.filename 
     file_content = await file.read()
     
@@ -215,6 +219,7 @@ async def predict_inventory_from_file(
 
         df_uploaded = pd.read_excel(BytesIO(file_content))
         
+        # แปลงวันที่เป็น String เพื่อให้ JSON Serialize ได้ไม่ Error
         current_date = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         df_uploaded['Date'] = current_date
         
@@ -228,7 +233,6 @@ async def predict_inventory_from_file(
         if is_updated:
             logger.info("🚀 ตรวจพบข้อมูลใหม่...")
             
-            # --- Logic เตรียมข้อมูล ---
             if 'Current_Patient_Count' in df_uploaded.columns:
                 total_vists = pd.to_numeric(df_uploaded['Current_Patient_Count'], errors='coerce').fillna(0)
                 df_uploaded['Visit_Campus'] = total_vists
@@ -242,7 +246,7 @@ async def predict_inventory_from_file(
                 df_uploaded['Usage_Qty'] = pd.to_numeric(df_uploaded['Usage_Qty'], errors='coerce') * \
                                           pd.to_numeric(df_uploaded['Conversion_Factor'], errors='coerce').fillna(1)
             
-            # ⚡ CLEAR CACHE: ข้อมูลเปลี่ยนแล้ว ต้องลบ Cache เก่าทิ้ง เพื่อให้ Initial Load ครั้งหน้าคำนวณใหม่
+            # ลบ Cache เก่าทิ้ง (ยังคงไว้เพื่อให้แน่ใจว่าไม่มีไฟล์ขยะ)
             try:
                 for f in os.listdir(DATA_DIR_PATH):
                     if f.startswith("dashboard_cache_"):
@@ -251,24 +255,29 @@ async def predict_inventory_from_file(
             except Exception as e:
                 logger.warning(f"Failed to clear cache: {e}")
 
-            # ⚡ Background Retrain
             logger.info("⏳ Scheduling background retraining task...")
             background_tasks.add_task(run_retrain_process)
-            
-            # 🆕 เพิ่ม Task บันทึก Log ลง Neon DB (ทำงานเบื้องหลัง)
             background_tasks.add_task(log_upload_to_neon, filename, "Updated & Retraining", forecast_days)
             
             logger.info("ℹ️ Using current model while retraining runs in background.")
 
         else:
             logger.info(f"ℹ️ ไฟล์เดิม เปลี่ยน forecast_days เป็น {forecast_days}: ข้ามขั้นตอนเทรน")
-            # 🆕 เพิ่ม Task บันทึก Log กรณีไม่ได้อัปเดต (ไฟล์ซ้ำ)
             background_tasks.add_task(log_upload_to_neon, filename, "No Update (Duplicate)", forecast_days)
 
-        # --- step 5: predict ---
         results = predict_inventory_usage(metadata, file_content, forecast_days, is_upload=True)
         
-        # เตรียมข้อมูลสำหรับ Response
+        # 🛡️ 1. จัดการข้อมูล Raw Data (แปลง Date, จัดการ NaN)
+        df_for_json = df_mapped.copy()
+        # แปลงวันที่ทั้งหมดเป็น String
+        for col in df_for_json.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_for_json[col]):
+                 df_for_json[col] = df_for_json[col].dt.strftime('%Y-%m-%d')
+        
+        # แปลง NaN เป็น None (JSON null)
+        uploaded_data_json = df_for_json.replace({np.nan: None}).to_dict(orient='records')
+
+        # 🛡️ 2. สร้าง Response Data
         response_data = {
             "Total_SKUs_Trained": results['metrics']['total_skus'],
             "Total_Reorder_Cost": results['metrics']['reorder_cost_total'],
@@ -278,31 +287,30 @@ async def predict_inventory_from_file(
                 "Medium_Priority_Items": results['metrics']['medium_priority_items'],
                 "Action_Items_Summary": results['metrics']['action_items']
             },
+            "Uploaded_Data": uploaded_data_json, 
             "Message": "Data uploaded successfully. Model retraining started in background." if is_updated else "Prediction updated."
         }
         
-        # ⚡ Instant Cache Update (บันทึกลง Cache ทันทีเพื่อให้ตอน Refresh หน้าจอได้ข้อมูลชุดเดียวกัน)
-        try:
-            CACHE_FILE = os.path.join(DATA_DIR_PATH, f'dashboard_cache_{forecast_days}.json')
-            
-            # ตัด Message ออกก่อนเซฟลง Cache
-            cache_data = response_data.copy()
-            if "Message" in cache_data: del cache_data["Message"]
-            
-            with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, cls=NpEncoder, ensure_ascii=False)
-            logger.info(f"💾 Instant Cache Updated for {forecast_days} days.")
-        except Exception as e:
-            logger.error(f"Failed to update instant cache: {e}")
+        # 🛡️ 3. ล้างข้อมูลครั้งสุดท้ายด้วย sanitize_for_json เพื่อป้องกัน NaN หลุดรอด
+        response_data = sanitize_for_json(response_data)
+        
+        # ❌ [DISABLED] Instant Cache Update - ไม่บันทึก Cache แล้ว
+        # try:
+        #     CACHE_FILE = os.path.join(DATA_DIR_PATH, f'dashboard_cache_{forecast_days}.json')
+        #     cache_data = response_data.copy()
+        #     if "Message" in cache_data: del cache_data["Message"]
+        #     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+        #         json.dump(cache_data, f, cls=NpEncoder, ensure_ascii=False)
+        #     logger.info(f"💾 Instant Cache Updated for {forecast_days} days.")
+        # except Exception as e:
+        #     logger.error(f"Failed to update instant cache: {e}")
 
         return response_data
 
     except Exception as e:
         logger.error(f"Prediction failed: {e}")
-        # 🆕 บันทึก Log กรณี Error ลง DB ด้วย
         if filename:
              background_tasks.add_task(log_upload_to_neon, filename, f"Error: {str(e)}", forecast_days)
-             
         import traceback
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error: {e}")
@@ -316,24 +324,45 @@ async def initial_forecast(
     if not metadata:
         raise HTTPException(status_code=503, detail="AI Model not ready.")
         
-    # 🆕 CACHE KEY: แยกไฟล์ Cache ตามจำนวนวันที่ Forecast
-    CACHE_FILE = os.path.join(DATA_DIR_PATH, f'dashboard_cache_{forecast_days}.json')
+    # ❌ [DISABLED] 1. ลองอ่านจาก Cache ก่อน (Fast Path 🚀)
+    # CACHE_FILE = os.path.join(DATA_DIR_PATH, f'dashboard_cache_{forecast_days}.json')
+    # if os.path.exists(CACHE_FILE):
+    #     try:
+    #         with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+    #             cached_data = json.load(f)
+    #         logger.info(f"✅ Loaded initial data from Cache ({forecast_days} days)")
+    #         return cached_data
+    #     except Exception as e:
+    #         logger.warning(f"Cache read error (will re-compute): {e}")
 
-    # 1. ลองอ่านจาก Cache ก่อน (Fast Path 🚀)
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                cached_data = json.load(f)
-            logger.info(f"✅ Loaded initial data from Cache ({forecast_days} days)")
-            return cached_data
-        except Exception as e:
-            logger.warning(f"Cache read error (will re-compute): {e}")
-
-    # 2. ถ้าไม่มี Cache ต้องคำนวณใหม่ (Slow Path)
+    # 2. คำนวณใหม่เสมอ (Always Re-compute)
     try:
-        logger.info("Computing initial forecast (No Cache found)...")
+        logger.info("Computing initial forecast (Fresh Calculation)...")
+        
+        # ดึงข้อมูลจาก Master File (Data ล่าสุดที่อยู่ในระบบ)
         file_content = get_reference_data() 
         
+        # อ่าน DataFrame เพื่อเตรียมข้อมูลแสดงผล Table (Uploaded Data)
+        df_uploaded = pd.read_excel(BytesIO(file_content))
+        current_date = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        df_uploaded['Date'] = current_date
+        mapping = manual_column_mapping(df_uploaded.columns.tolist())
+        df_mapped = df_uploaded.rename(columns=mapping)
+        
+        if 'Current_Patient_Count' in df_uploaded.columns:
+            total_vists = pd.to_numeric(df_uploaded['Current_Patient_Count'], errors='coerce').fillna(0)
+            df_uploaded['Visit_Campus'] = total_vists
+        if 'Latest_Usage_Qty' in df_uploaded.columns:
+                df_uploaded['Usage_Qty'] = df_uploaded['Latest_Usage_Qty']
+
+        # 🛡️ จัดการข้อมูล Raw Data ก่อนส่ง
+        df_for_json = df_mapped.copy()
+        for col in df_for_json.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_for_json[col]):
+                 df_for_json[col] = df_for_json[col].dt.strftime('%Y-%m-%d')
+        uploaded_data_json = df_for_json.replace({np.nan: None}).to_dict(orient='records')
+        
+        # คำนวณผล AI
         results = predict_inventory_usage(metadata, file_content, forecast_days, is_upload=False)
         
         response_data = {
@@ -344,16 +373,20 @@ async def initial_forecast(
                 "High_Priority_Items": results['metrics']['high_priority_items'],
                 "Medium_Priority_Items": results['metrics']['medium_priority_items'],
                 "Action_Items_Summary": results['metrics']['action_items']
-            }
+            },
+            "Uploaded_Data": uploaded_data_json 
         }
 
-        # 🆕 บันทึก Cache ไว้ใช้รอบหน้า
-        try:
-            with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(response_data, f, cls=NpEncoder, ensure_ascii=False)
-            logger.info("💾 Saved new dashboard cache.")
-        except Exception as e:
-            logger.error(f"Failed to save cache: {e}")
+        # 🛡️ ล้างข้อมูลครั้งสุดท้าย
+        response_data = sanitize_for_json(response_data)
+
+        # ❌ [DISABLED] บันทึก Cache ไว้ใช้รอบหน้า
+        # try:
+        #     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+        #         json.dump(response_data, f, cls=NpEncoder, ensure_ascii=False)
+        #     logger.info("💾 Saved new dashboard cache.")
+        # except Exception as e:
+        #     logger.error(f"Failed to save cache: {e}")
 
         return response_data
 
