@@ -219,12 +219,22 @@ async def predict_inventory_from_file(
 
         df_uploaded = pd.read_excel(BytesIO(file_content))
         
-        # แปลงวันที่เป็น String เพื่อให้ JSON Serialize ได้ไม่ Error
-        current_date = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        df_uploaded['Date'] = current_date
-        
+        # 🟢 STEP 1: Map Columns ก่อน เพื่อให้ชื่อตรงกับระบบ
         mapping = manual_column_mapping(df_uploaded.columns.tolist())
         df_mapped = df_uploaded.rename(columns=mapping)
+
+        # 🟢 STEP 2: สร้างข้อมูลสำหรับแสดงตาราง (Preview Data) ทันทีตรงนี้!
+        # ข้อมูลตรงนี้จะเป็น Original Date จากไฟล์เลย (หรือว่างถ้าไม่มี) 
+        # เพราะเรายังไม่ได้สั่ง current_date ทับลงไป
+        df_for_json = df_mapped.copy()
+        for col in df_for_json.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_for_json[col]):
+                 df_for_json[col] = df_for_json[col].dt.strftime('%Y-%m-%d')
+        uploaded_data_json = df_for_json.replace({np.nan: None}).to_dict(orient='records')
+
+        # 🟢 STEP 3: ค่อยเติม Date ปัจจุบัน (System Date) ใส่ df_mapped เพื่อส่งให้ AI
+        current_date = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        df_mapped['Date'] = current_date # ใส่ Date ปัจจุบันเพื่อเข้าโมเดล
 
         # Update Master File
         from core.data_master import update_master_file
@@ -233,18 +243,18 @@ async def predict_inventory_from_file(
         if is_updated:
             logger.info("🚀 ตรวจพบข้อมูลใหม่...")
             
-            if 'Current_Patient_Count' in df_uploaded.columns:
-                total_vists = pd.to_numeric(df_uploaded['Current_Patient_Count'], errors='coerce').fillna(0)
-                df_uploaded['Visit_Campus'] = total_vists
-                df_uploaded['Patient_E'] = (total_vists * 0.15).astype(int)
-                df_uploaded['Patient_I'] = (total_vists * 0.25).astype(int)
-                df_uploaded['Patient_O'] = (total_vists * 0.60).astype(int)
+            if 'Current_Patient_Count' in df_mapped.columns:
+                total_vists = pd.to_numeric(df_mapped['Current_Patient_Count'], errors='coerce').fillna(0)
+                df_mapped['Visit_Campus'] = total_vists
+                df_mapped['Patient_E'] = (total_vists * 0.15).astype(int)
+                df_mapped['Patient_I'] = (total_vists * 0.25).astype(int)
+                df_mapped['Patient_O'] = (total_vists * 0.60).astype(int)
 
-            if 'Latest_Usage_Qty' in df_uploaded.columns:
-                df_uploaded['Usage_Qty'] = df_uploaded['Latest_Usage_Qty']
-            if 'Conversion_Factor' in df_uploaded.columns:
-                df_uploaded['Usage_Qty'] = pd.to_numeric(df_uploaded['Usage_Qty'], errors='coerce') * \
-                                          pd.to_numeric(df_uploaded['Conversion_Factor'], errors='coerce').fillna(1)
+            if 'Latest_Usage_Qty' in df_mapped.columns:
+                df_mapped['Usage_Qty'] = df_mapped['Latest_Usage_Qty']
+            if 'Conversion_Factor' in df_mapped.columns:
+                df_mapped['Usage_Qty'] = pd.to_numeric(df_mapped['Usage_Qty'], errors='coerce') * \
+                                          pd.to_numeric(df_mapped['Conversion_Factor'], errors='coerce').fillna(1)
             
             # ลบ Cache เก่าทิ้ง (ยังคงไว้เพื่อให้แน่ใจว่าไม่มีไฟล์ขยะ)
             try:
@@ -265,19 +275,15 @@ async def predict_inventory_from_file(
             logger.info(f"ℹ️ ไฟล์เดิม เปลี่ยน forecast_days เป็น {forecast_days}: ข้ามขั้นตอนเทรน")
             background_tasks.add_task(log_upload_to_neon, filename, "No Update (Duplicate)", forecast_days)
 
-        results = predict_inventory_usage(metadata, file_content, forecast_days, is_upload=True)
-        
-        # 🛡️ 1. จัดการข้อมูล Raw Data (แปลง Date, จัดการ NaN)
-        df_for_json = df_mapped.copy()
-        # แปลงวันที่ทั้งหมดเป็น String
-        for col in df_for_json.columns:
-            if pd.api.types.is_datetime64_any_dtype(df_for_json[col]):
-                 df_for_json[col] = df_for_json[col].dt.strftime('%Y-%m-%d')
-        
-        # แปลง NaN เป็น None (JSON null)
-        uploaded_data_json = df_for_json.replace({np.nan: None}).to_dict(orient='records')
+        # ส่ง df_mapped ที่เติม Date แล้วไปทำนายผล
+        # ต้องแปลงกลับเป็น Excel Bytes เพราะฟังก์ชัน predict รับ Bytes
+        with BytesIO() as output:
+            df_mapped.to_excel(output, index=False)
+            file_content_ai = output.getvalue()
 
-        # 🛡️ 2. สร้าง Response Data
+        results = predict_inventory_usage(metadata, file_content_ai, forecast_days, is_upload=True)
+        
+        # 🛡️ สร้าง Response Data โดยใช้ uploaded_data_json ที่เราเตรียมไว้ตั้งแต่ต้น
         response_data = {
             "Total_SKUs_Trained": results['metrics']['total_skus'],
             "Total_Reorder_Cost": results['metrics']['reorder_cost_total'],
@@ -291,7 +297,7 @@ async def predict_inventory_from_file(
             "Message": "Data uploaded successfully. Model retraining started in background." if is_updated else "Prediction updated."
         }
         
-        # 🛡️ 3. ล้างข้อมูลครั้งสุดท้ายด้วย sanitize_for_json เพื่อป้องกัน NaN หลุดรอด
+        # 🛡️ ล้างข้อมูลครั้งสุดท้ายด้วย sanitize_for_json เพื่อป้องกัน NaN หลุดรอด
         response_data = sanitize_for_json(response_data)
         
         # ❌ [DISABLED] Instant Cache Update - ไม่บันทึก Cache แล้ว
@@ -344,26 +350,36 @@ async def initial_forecast(
         
         # อ่าน DataFrame เพื่อเตรียมข้อมูลแสดงผล Table (Uploaded Data)
         df_uploaded = pd.read_excel(BytesIO(file_content))
-        current_date = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        df_uploaded['Date'] = current_date
+        
+        # 🟢 STEP 1: Map Columns ก่อน
         mapping = manual_column_mapping(df_uploaded.columns.tolist())
         df_mapped = df_uploaded.rename(columns=mapping)
-        
-        if 'Current_Patient_Count' in df_uploaded.columns:
-            total_vists = pd.to_numeric(df_uploaded['Current_Patient_Count'], errors='coerce').fillna(0)
-            df_uploaded['Visit_Campus'] = total_vists
-        if 'Latest_Usage_Qty' in df_uploaded.columns:
-                df_uploaded['Usage_Qty'] = df_uploaded['Latest_Usage_Qty']
 
-        # 🛡️ จัดการข้อมูล Raw Data ก่อนส่ง
+        # 🟢 STEP 2: สร้างข้อมูลสำหรับแสดงตาราง (Preview Data) ทันที!
+        # ก่อนที่จะไปยุ่งกับ Date (เพื่อให้แสดงวันที่จริงจากไฟล์ Reference)
         df_for_json = df_mapped.copy()
         for col in df_for_json.columns:
             if pd.api.types.is_datetime64_any_dtype(df_for_json[col]):
                  df_for_json[col] = df_for_json[col].dt.strftime('%Y-%m-%d')
         uploaded_data_json = df_for_json.replace({np.nan: None}).to_dict(orient='records')
+
+        # 🟢 STEP 3: ค่อยเติม Date ปัจจุบัน (System Date) ใส่ df_mapped เพื่อส่งให้ AI
+        current_date = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        df_mapped['Date'] = current_date
+        
+        if 'Current_Patient_Count' in df_mapped.columns:
+            total_vists = pd.to_numeric(df_mapped['Current_Patient_Count'], errors='coerce').fillna(0)
+            df_mapped['Visit_Campus'] = total_vists
+        if 'Latest_Usage_Qty' in df_mapped.columns:
+                df_mapped['Usage_Qty'] = df_mapped['Latest_Usage_Qty']
+
+        # แปลงเป็น Bytes เพื่อส่งเข้า AI
+        with BytesIO() as output:
+            df_mapped.to_excel(output, index=False)
+            file_content_ai = output.getvalue()
         
         # คำนวณผล AI
-        results = predict_inventory_usage(metadata, file_content, forecast_days, is_upload=False)
+        results = predict_inventory_usage(metadata, file_content_ai, forecast_days, is_upload=False)
         
         response_data = {
             "Total_SKUs_Trained": results['metrics']['total_skus'],
@@ -374,7 +390,7 @@ async def initial_forecast(
                 "Medium_Priority_Items": results['metrics']['medium_priority_items'],
                 "Action_Items_Summary": results['metrics']['action_items']
             },
-            "Uploaded_Data": uploaded_data_json 
+            "Uploaded_Data": uploaded_data_json # ใช้ตาราง Raw Data
         }
 
         # 🛡️ ล้างข้อมูลครั้งสุดท้าย
