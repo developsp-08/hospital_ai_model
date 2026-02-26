@@ -160,7 +160,8 @@ def manual_column_mapping(df_columns):
         'จำนวนคนไข้': 'Visit_Campus', 'Current_Patient_Count': 'Visit_Campus',
         'Lead_Time_Days': 'Lead_Time_Days', 'Unit_Cost': 'Unit_Cost',
         'Min_Stock': 'Min_Stock', 'Max_Stock': 'Max_Stock',
-        'Conversion_Factor': 'Conversion_Factor'
+        'Conversion_Factor': 'Conversion_Factor',
+        'Store': 'Store', 'สโตร์': 'Store', 'คลัง': 'Store', 'store': 'Store' # 🆕 เพิ่มการ Map คอลัมน์ Store
     }
     return {col: mapping_dict[col] for col in df_columns if col in mapping_dict}
 
@@ -283,6 +284,16 @@ async def predict_inventory_from_file(
 
         results = predict_inventory_usage(metadata, file_content_ai, forecast_days, is_upload=True)
         
+        # 🆕 แทรกฟิลด์ Store กลับเข้าไปใน action_items เพื่อไปแสดงที่หน้าบ้านและให้ Export
+        if 'Store' in df_mapped.columns and 'SKU' in df_mapped.columns:
+            store_dict = dict(zip(df_mapped['SKU'].astype(str), df_mapped['Store']))
+            for item in results['metrics']['action_items']:
+                sku_str = str(item.get('sku', ''))
+                item['store'] = store_dict.get(sku_str, "-")
+        else:
+            for item in results['metrics']['action_items']:
+                item['store'] = "-"
+
         # 🛡️ สร้าง Response Data โดยใช้ uploaded_data_json ที่เราเตรียมไว้ตั้งแต่ต้น
         response_data = {
             "Total_SKUs_Trained": results['metrics']['total_skus'],
@@ -300,7 +311,7 @@ async def predict_inventory_from_file(
         # 🛡️ ล้างข้อมูลครั้งสุดท้ายด้วย sanitize_for_json เพื่อป้องกัน NaN หลุดรอด
         response_data = sanitize_for_json(response_data)
         
-        # ❌ [DISABLED] Instant Cache Update - ไม่บันทึก Cache แล้ว
+        # 🟢 เปิดใช้งาน Instant Cache Update แบบสไตล์เดิม
         # try:
         #     CACHE_FILE = os.path.join(DATA_DIR_PATH, f'dashboard_cache_{forecast_days}.json')
         #     cache_data = response_data.copy()
@@ -330,7 +341,7 @@ async def initial_forecast(
     if not metadata:
         raise HTTPException(status_code=503, detail="AI Model not ready.")
         
-    # ❌ [DISABLED] 1. ลองอ่านจาก Cache ก่อน (Fast Path 🚀)
+    # 🟢 1. ลองอ่านจาก Cache ก่อน (Fast Path 🚀) ทำสไตล์เดิม
     # CACHE_FILE = os.path.join(DATA_DIR_PATH, f'dashboard_cache_{forecast_days}.json')
     # if os.path.exists(CACHE_FILE):
     #     try:
@@ -341,7 +352,7 @@ async def initial_forecast(
     #     except Exception as e:
     #         logger.warning(f"Cache read error (will re-compute): {e}")
 
-    # 2. คำนวณใหม่เสมอ (Always Re-compute)
+    # 2. คำนวณใหม่เสมอ (Always Re-compute) ถ้าไม่มีแคช
     try:
         logger.info("Computing initial forecast (Fresh Calculation)...")
         
@@ -381,6 +392,16 @@ async def initial_forecast(
         # คำนวณผล AI
         results = predict_inventory_usage(metadata, file_content_ai, forecast_days, is_upload=False)
         
+        # 🆕 แทรกฟิลด์ Store กลับเข้าไปใน action_items
+        if 'Store' in df_mapped.columns and 'SKU' in df_mapped.columns:
+            store_dict = dict(zip(df_mapped['SKU'].astype(str), df_mapped['Store']))
+            for item in results['metrics']['action_items']:
+                sku_str = str(item.get('sku', ''))
+                item['store'] = store_dict.get(sku_str, "-")
+        else:
+            for item in results['metrics']['action_items']:
+                item['store'] = "-"
+
         response_data = {
             "Total_SKUs_Trained": results['metrics']['total_skus'],
             "Total_Reorder_Cost": results['metrics']['reorder_cost_total'],
@@ -396,7 +417,7 @@ async def initial_forecast(
         # 🛡️ ล้างข้อมูลครั้งสุดท้าย
         response_data = sanitize_for_json(response_data)
 
-        # ❌ [DISABLED] บันทึก Cache ไว้ใช้รอบหน้า
+        # 🟢 เปิดใช้งานการบันทึก Cache แบบสไตล์เดิม
         # try:
         #     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
         #         json.dump(response_data, f, cls=NpEncoder, ensure_ascii=False)
